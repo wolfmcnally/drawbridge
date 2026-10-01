@@ -1,0 +1,54 @@
+name: Qualification
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: wolfmcnally/vellric
+          ref: a2b140a4eda87b4e6cb5925ba5e605031890fb31
+          path: .ci-vellric-source
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+        with:
+          version: "0.9.26"
+      - name: Build the qualified OCR engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends autoconf automake libtool libleptonica-dev ghostscript qpdf ffmpeg
+          curl -fsSL https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.5.2.tar.gz -o "$RUNNER_TEMP/tesseract.tar.gz"
+          echo "6235ea0dae45ea137f59c09320406f5888383741924d98855bd2ce0d16b54f21  $RUNNER_TEMP/tesseract.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/tesseract.tar.gz" -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP/tesseract-5.5.2"
+          ./autogen.sh
+          ./configure --prefix="$RUNNER_TEMP/ocr" --disable-shared --enable-static --disable-openmp --disable-doc
+          make -j4
+          make install
+          mkdir -p "$RUNNER_TEMP/ocr/share/tessdata"
+          for language in eng osd; do
+            curl -fsSL "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/4.1.0/$language.traineddata" -o "$RUNNER_TEMP/ocr/share/tessdata/$language.traineddata"
+          done
+          echo "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  $RUNNER_TEMP/ocr/share/tessdata/eng.traineddata" | sha256sum --check
+          echo "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff  $RUNNER_TEMP/ocr/share/tessdata/osd.traineddata" | sha256sum --check
+          echo "$RUNNER_TEMP/ocr/bin" >> "$GITHUB_PATH"
+          echo "TESSDATA_PREFIX=$RUNNER_TEMP/ocr/share/tessdata" >> "$GITHUB_ENV"
+      - name: Independently install the qualified Vellric source
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv venv --python 3.12.12 "$RUNNER_TEMP/vellric-runtime"
+          uv export --locked --project .ci-vellric-source/project --extra ocr --no-dev --no-emit-project --format requirements-txt --output-file "$RUNNER_TEMP/vellric-requirements.txt"
+          uv pip install --python "$RUNNER_TEMP/vellric-runtime/bin/python" --require-hashes --requirements "$RUNNER_TEMP/vellric-requirements.txt"
+          uv pip install --python "$RUNNER_TEMP/vellric-runtime/bin/python" --no-deps --build-constraints .ci-vellric-source/project/build-constraints.txt .ci-vellric-source/project
+          ln -s "$RUNNER_TEMP/ocr/bin/tesseract" "$RUNNER_TEMP/vellric-runtime/bin/tesseract"
+          echo "DRAWBRIDGE_VELLRIC=$RUNNER_TEMP/vellric-runtime/bin/vellric" >> "$GITHUB_ENV"
+      - name: Install locked fixture dependencies
+        run: uv sync --locked
+      - name: Qualify every Drawbridge test
+        run: uv run --locked pytest -q

@@ -1,0 +1,23 @@
+#!/bin/sh
+# Launcher for a checkout of drawbridge. Symlink this file into PATH
+# (e.g. ~/bin/drawbridge -> ../DevProjects/drawbridge/drawbridge); it resolves
+# its own real location, so the symlink can live anywhere, and it runs the
+# checkout's editable install, so source edits take effect without reinstall.
+set -eu
+
+self="$0"
+while [ -L "$self" ]; do
+  target=$(readlink "$self")
+  case "$target" in
+    /*) self="$target" ;;
+    *)  self="$(dirname "$self")/$target" ;;
+  esac
+done
+root=$(cd "$(dirname "$self")" && pwd -P)
+python="$root/.venv/bin/python"
+
+if [ ! -x "$python" ]; then
+  echo "drawbridge: no environment at $root/.venv; run 'uv sync' in $root" >&2
+  exit 5
+fi
+exec "$python" -m drawbridge "$@"

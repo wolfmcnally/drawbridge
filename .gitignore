@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+uv.lock.bak
+tests/fixtures/out/
+
+# Private, never committed: keys, and real documents or recordings used for local testing.
+.env
+local/

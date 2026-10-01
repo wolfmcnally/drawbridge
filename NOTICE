@@ -1,0 +1,18 @@
+Drawbridge — MIT source; original full grant is LICENSE.
+
+The runtime wheel contains Drawbridge Python source and project notices.
+Its dependencies install separately and retain their own grants.
+Vellric is independently installed under AGPL-3.0-only.
+
+The source archive includes public PDF test fixtures, separately licensed:
+- RFC 8785: IETF Trust Legal Provisions; its complete copyright/legal notice
+  remains inside tests/fixtures/rfc8785.pdf. Original source:
+  https://www.rfc-editor.org/rfc/rfc8785.pdf
+- OCRmyPDF test resources: CC-BY-SA-4.0, James R. Barlow, with source images
+  attributed to Wikimedia by the upstream fixture provenance. Original
+  sources and exact hashes remain in tests/fixtures/MANIFEST.md.
+  Full license: LICENSES/CC-BY-SA-4.0.txt, from SPDX license-list-data;
+  canonical legal code: https://creativecommons.org/licenses/by-sa/4.0/legalcode
+The fixtures are retained unmodified. MIT does not replace their grants.
+
+Release builds use build-constraints.txt and the source uv.lock.
