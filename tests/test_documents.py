@@ -141,7 +141,7 @@ def test_malformed_docx_fails_typed(tmp_path):
         convert_file(path, media_type=DOCX_MEDIA_TYPE)
 
 
-def test_email_headers_body_and_attachment_note(tmp_path):
+def test_email_headers_body_and_attachment_note(tmp_path, monkeypatch):
     path = tmp_path / "note"
     path.write_bytes(
         b"From: A Sender <a@example.org>\r\nTo: b@example.org\r\nSubject: Pipes | and more\r\n"
@@ -150,7 +150,22 @@ def test_email_headers_body_and_attachment_note(tmp_path):
         b"--XX\r\nContent-Type: text/plain\r\n\r\nHello there.\r\n"
         b"--XX\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename=scan.pdf\r\n\r\n%PDF-\r\n--XX--\r\n"
     )
-    result = convert_file(path)
+    from drawbridge import refine_media_type
+    import subprocess
+
+    # Reproduce Linux libmagic's preference for the embedded attachment signature.
+    real_run = subprocess.run
+    def linux_file(argv, **kwargs):
+        if argv[0] == "file":
+            return subprocess.CompletedProcess(argv, 0, "application/pdf\n", "")
+        return real_run(argv, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(subprocess, "run", linux_file)
+        result = convert_file(path)
+    pdf = tmp_path / "header-fields-in-pdf"
+    pdf.write_bytes(b"%PDF-1.7\nFrom: source\nTo: destination\nSubject: example\n\n")
+    assert refine_media_type(pdf, "application/pdf") == "application/pdf"
     header, body = round_trip(result, path)
     assert (result.media_type, header["unit"], header["attachment_count"]) == ("message/rfc822", "message", 1)
     assert "| Subject | Pipes \\| and more |" in body

@@ -48,6 +48,7 @@ jobs:
           uv pip install --python "$RUNNER_TEMP/vellric-runtime/bin/python" --no-deps --build-constraints .ci-vellric-source/project/build-constraints.txt .ci-vellric-source/project
           ln -s "$RUNNER_TEMP/ocr/bin/tesseract" "$RUNNER_TEMP/vellric-runtime/bin/tesseract"
           echo "DRAWBRIDGE_VELLRIC=$RUNNER_TEMP/vellric-runtime/bin/vellric" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/vellric-runtime/bin" >> "$GITHUB_PATH"
       - name: Install locked fixture dependencies
         run: uv sync --locked
       - name: Qualify every Drawbridge test

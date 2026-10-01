@@ -274,6 +274,13 @@ def _looks_like_mail(path: Path) -> bool:
     with path.open("rb") as handle:
         head = handle.read(8192).decode("utf-8", errors="replace")
     block = head.replace("\r\n", "\n").split("\n\n", 1)[0]
+    lines = block.split("\n")
+    # A mail header block begins with a field, not a PDF header or arbitrary prose.
+    # Some libmagic versions prioritize a PDF signature inside a MIME attachment.
+    if not lines or ":" not in lines[0] or lines[0][:1].isspace():
+        return False
+    if any(":" not in line and not line[:1].isspace() for line in lines):
+        return False
     names = {
         line.split(":", 1)[0].strip().lower()
         for line in block.split("\n")
@@ -291,6 +298,6 @@ def refine_media_type(path: Path, media: str) -> str:
         "application/vnd.ms-excel",
     }:
         return _ole_media_type(path) or media
-    if media == "text/plain" and _looks_like_mail(path):
+    if media in {"text/plain", PDF_MEDIA_TYPE} and _looks_like_mail(path):
         return "message/rfc822"
     return media
