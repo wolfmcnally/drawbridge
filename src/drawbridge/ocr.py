@@ -136,6 +136,33 @@ class CliOcrBackend:
         self.max_input_bytes = max_input_bytes
         self.max_pages = max_pages
 
+    def _resource_options(self) -> list[str]:
+        memory = self.memory_mib
+        if memory is None and "DRAWBRIDGE_VELLRIC_MEMORY_MIB" not in os.environ:
+            memory = 2048 + 512 * (self.ocr_jobs - 1)
+        options = []
+        for flag, value in [
+            ("--memory-mib", memory),
+            ("--max-input-bytes", self.max_input_bytes),
+            ("--max-pages", self.max_pages),
+        ]:
+            if value is not None:
+                options += [flag, str(value)]
+        return options
+
+    @contextmanager
+    def native_document(self, pdf_path: Path, *, raster_threshold: float = 0.5,
+                        expected_sha256: str | None = None):
+        """A complete native job within the same CPU/memory grant, with no OCR or preflight."""
+        from ._vellric import document_job
+
+        options = ["--ocr", "never", "--preflight", "off", "--jobs", str(self.ocr_jobs),
+                   "--raster-threshold", str(raster_threshold), *self._resource_options()]
+        with self.capacity.reserve(self.ocr_jobs):
+            with document_job(Path(pdf_path), "convert", *options,
+                              expected_sha256=expected_sha256, timeout=self.document_timeout) as bundle:
+                yield bundle
+
     def document(
         self,
         pdf_path: Path,
@@ -173,16 +200,7 @@ class CliOcrBackend:
         ]
         if self.tessdata_dir is not None:
             options += ["--tessdata-dir", str(self.tessdata_dir)]
-        memory = self.memory_mib
-        if memory is None and "DRAWBRIDGE_VELLRIC_MEMORY_MIB" not in os.environ:
-            memory = 2048 + 512 * (self.ocr_jobs - 1)
-        for flag, value in [
-            ("--memory-mib", memory),
-            ("--max-input-bytes", self.max_input_bytes),
-            ("--max-pages", self.max_pages),
-        ]:
-            if value is not None:
-                options += [flag, str(value)]
+        options += self._resource_options()
         deadline = self.document_timeout
         if deadline is None and "DRAWBRIDGE_VELLRIC_TIMEOUT_SECONDS" not in os.environ:
             page_budget = (

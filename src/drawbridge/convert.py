@@ -79,6 +79,10 @@ def convert_pdf(
     searchable: Path | None = None
     processor = ident.inspection.processor
     if selected:
+        from .configuration import ConfigurationError, current_configuration
+
+        if current_configuration().files and ocr is not None and not isinstance(ocr, CliOcrBackend):
+            raise ConfigurationError("Explicit PDF configuration requires CliOcrBackend for OCR leaf validation")
         if ocr is None:
             raise ConversionOperationalError(
                 "PDF has pages requiring OCR and OCR is unavailable"
@@ -106,6 +110,22 @@ def convert_pdf(
         processor = result.processor or processor
         method = METHOD_OCR
     else:
+        from .configuration import current_configuration
+
+        if current_configuration().files:
+            from .pdf_tools import inspection_from_bundle
+
+            backend = ocr if isinstance(ocr, CliOcrBackend) else CliOcrBackend(available_cores=1, preflight=False)
+            with backend.native_document(
+                pdf_path, raster_threshold=options.raster_threshold,
+                expected_sha256=ident.inspection.source_sha256,
+            ) as bundle:
+                configured_inspection = inspection_from_bundle(bundle)
+                if configured_inspection.page_texts != tuple(pages) or bundle.texts != tuple(pages):
+                    raise ConversionOperationalError("PDF/native text changed after inspection")
+                if bundle.manifest["outstanding_candidates"]:
+                    raise ConversionOperationalError("Vellric left OCR candidates outstanding")
+                processor = configured_inspection.processor
         method = METHOD_NATIVE
     extra: dict[str, Any] = {
         "page_count": expected,

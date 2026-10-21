@@ -466,3 +466,76 @@ def test_compatibility_probe_cache_invalidates_when_cli_changes(monkeypatch, tmp
     executable.write_text("second changed executable")
     _vellric._check_doctor(str(executable), tmp_path)
     assert len(calls) == 2
+
+
+@pytest.mark.parametrize("version,supported", [
+    ("0.2.1", False), ("0.2.2", True), ("0.2.3", True), ("0.3.0", True), ("1.0.0", True),
+    (None, False), ([], False), ("0.2.2rc1", False), ("0.2.2+local", False),
+    ("00.2.2", False), ("0.2.2\n", False), ("9" * 1000, False),
+])
+def test_configured_capability_admission_rechecks_cached_legacy_doctor(monkeypatch, tmp_path, version, supported):
+    executable = tmp_path / "vellric"
+    executable.write_text("synthetic doctor identity")
+    calls = []
+    def run(argv, work, timeout):
+        calls.append(argv)
+        return 0, json.dumps({"schema": _vellric.SCHEMA, "behavior": _vellric.BEHAVIOR,
+                              "tool": {"name": "vellric", "version": version}})
+    monkeypatch.setattr(_vellric, "_run", run)
+    # Legacy schema admission intentionally does not require a new distribution version.
+    _vellric._check_doctor(str(executable), tmp_path)
+    if supported:
+        _vellric._check_doctor(str(executable), tmp_path, True)
+    else:
+        with pytest.raises(ConverterUnavailable, match="0.2.2"):
+            _vellric._check_doctor(str(executable), tmp_path, True)
+    assert len(calls) == 1
+
+
+def test_old_doctor_refuses_configured_job_before_forwarding(monkeypatch, tmp_path):
+    from drawbridge.configuration import configuration_context, load_configuration
+
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"%PDF-1.4\nsynthetic\n")
+    config = tmp_path / "settings.yaml"
+    config.write_text("vellric: {}\n")
+    executable = tmp_path / "vellric"
+    executable.write_text("synthetic identity")
+    calls = []
+    monkeypatch.setattr(_vellric, "executable", lambda: str(executable))
+    def run(argv, work, timeout):
+        calls.append(argv)
+        assert argv[1] == "doctor"
+        return 0, json.dumps({"schema": _vellric.SCHEMA, "behavior": _vellric.BEHAVIOR,
+                              "tool": {"name": "vellric", "version": "0.2.1"}})
+    monkeypatch.setattr(_vellric, "_run", run)
+    with configuration_context(load_configuration([config])):
+        with pytest.raises(ConverterUnavailable, match="0.2.2"):
+            with _vellric.document_job(source, "convert", "--ocr", "never"):
+                pytest.fail("old CLI admitted a configured convert")
+    assert len(calls) == 1
+
+
+def test_no_file_policy_preserves_exact_legacy_convert_argv(monkeypatch, tmp_path):
+    from drawbridge.configuration import Configuration, configuration_context
+
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"%PDF-1.4\nsynthetic\n")
+    monkeypatch.setattr(_vellric, "executable", lambda: sys.executable)
+    monkeypatch.setattr(_vellric, "_check_doctor", lambda *a: None)
+    monkeypatch.delenv("TESSDATA_PREFIX", raising=False)
+    for name in ("MEMORY_MIB", "MAX_INPUT_BYTES", "MAX_OUTPUT_BYTES", "MAX_PAGES", "TESSDATA_DIR"):
+        monkeypatch.delenv("DRAWBRIDGE_VELLRIC_" + name, raising=False)
+    observed = []
+    def run(argv, work, timeout):
+        observed.append(argv)
+        return 5, json.dumps({"schema": _vellric.STATUS, "status": "failed", "code": "internal-error", "stage": "job"})
+    monkeypatch.setattr(_vellric, "_run", run)
+    for settings in (Configuration(), Configuration(local_only=True, no_ai=True)):
+        with configuration_context(settings), pytest.raises(ConversionOperationalError):
+            with _vellric.document_job(source, "convert", "--ocr", "auto", timeout=60):
+                pytest.fail("synthetic failure was accepted")
+    for argv in observed:
+        assert argv[:4] == [sys.executable, "convert", str(source.resolve()), "--out"]
+        assert argv[5:] == ["--schema", "1", "--expected-sha256", _vellric.sha256_file(source),
+                            "--status-json", "--progress", "json", "--timeout-seconds", "60", "--ocr", "auto"]

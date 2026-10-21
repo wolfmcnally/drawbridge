@@ -1,6 +1,6 @@
 """Read complete document jobs from an independently installed Vellric CLI.
 
-This module uses only the standard library and imports no Vellric/PDF engine.
+This module imports no Vellric/PDF engine.
 The documented JSON/text artifacts, not Python objects, form the boundary.
 """
 
@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import selectors
 import shutil
 import signal
@@ -87,6 +88,10 @@ def configured_options(options: tuple[str, ...], *, command: str = "convert") ->
     data = os.environ.get("DRAWBRIDGE_VELLRIC_TESSDATA_DIR") or os.environ.get("TESSDATA_PREFIX")
     if command == "convert" and data and "--tessdata-dir" not in result:
         result += ["--tessdata-dir", str(Path(data).resolve())]
+    if command == "convert":
+        from .configuration import current_configuration
+
+        result += current_configuration().convert_options()
     return tuple(result)
 
 
@@ -446,13 +451,24 @@ def validate_bundle(
         raise ConversionOperationalError("Vellric artifacts failed independent validation") from exc
 
 
-_DOCTOR_CACHE: dict[tuple, None] = {}
+_DOCTOR_CACHE: dict[tuple, bool] = {}
 
 
-def _check_doctor(exe: str, work: Path) -> None:
+def _configuration_supported(doctor: dict) -> bool:
+    version = doctor["tool"].get("version")
+    if not isinstance(version, str) or len(version) > 32:
+        return False
+    if not re.fullmatch(r"(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})", version):
+        return False
+    return tuple(int(part) for part in version.split(".")) >= (0, 2, 2)
+
+
+def _check_doctor(exe: str, work: Path, require_configuration: bool = False) -> None:
     facts = Path(exe).stat()
     identity = (exe, facts.st_ino, facts.st_size, facts.st_mtime_ns)
     if identity in _DOCTOR_CACHE:
+        if require_configuration and not _DOCTOR_CACHE[identity]:
+            raise ConverterUnavailable("Explicit configuration requires Vellric 0.2.2 or newer with a stable numeric doctor version")
         return
     try:
         rc, out = _run([exe, "doctor", "--json"], work, 90)
@@ -473,7 +489,10 @@ def _check_doctor(exe: str, work: Path) -> None:
         raise ConverterUnavailable("Vellric CLI schema/behavior is unsupported")
     if len(_DOCTOR_CACHE) >= 32:
         _DOCTOR_CACHE.pop(next(iter(_DOCTOR_CACHE)))
-    _DOCTOR_CACHE[identity] = None
+    supported = _configuration_supported(doctor)
+    _DOCTOR_CACHE[identity] = supported
+    if require_configuration and not supported:
+        raise ConverterUnavailable("Explicit configuration requires Vellric 0.2.2 or newer with a stable numeric doctor version")
 
 
 @contextmanager
@@ -500,7 +519,10 @@ def document_job(
     with tempfile.TemporaryDirectory(prefix="drawbridge-vellric-") as directory:
         work = Path(directory).resolve()
         root = work / "result"
-        _check_doctor(exe, work)
+        if command == "convert" and ("--config" in options or "--config-root" in options):
+            _check_doctor(exe, work, True)
+        else:
+            _check_doctor(exe, work)
         argv = [
             exe,
             command,
@@ -555,6 +577,11 @@ def document_job(
                 raise ConversionOperationalError(
                     "Vellric typed failure contradicts its exit/status"
                 )
+            if code == "usage" and status.get("stage") == "settings":
+                from .configuration import ConfigurationError, current_configuration
+
+                if current_configuration().files:
+                    raise ConfigurationError("Vellric rejected its configuration; check the independently installed CLI's leaf schema and unresolved references")
             _failure(status, rc)
         if (
             status.get("status") != "complete"

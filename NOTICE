@@ -2,6 +2,7 @@ Drawbridge — MIT source; original full grant is LICENSE.
 
 The runtime wheel contains Drawbridge Python source and project notices.
 Its dependencies install separately and retain their own grants.
+Conric 0.1.0 is a separately installed MIT configuration dependency; source: https://github.com/wolfmcnally/conric at ed9286297e92b8c049f70eb15a3b5556ed107ff0 (flat repository root).
 Vellric is independently installed under AGPL-3.0-only.
 
 The source archive includes public PDF test fixtures, separately licensed:

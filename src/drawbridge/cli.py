@@ -19,6 +19,7 @@ import tempfile
 from pathlib import Path
 
 from . import __version__
+from .configuration import Configuration, configuration_context, load_configuration
 from .convert import ConversionOptions
 from .documents import convert_file, plan_report
 from .errors import (
@@ -91,6 +92,8 @@ def _build_parser() -> argparse.ArgumentParser:
     convert.add_argument("--json", action="store_true", help="print a JSON summary instead of prose")
     convert.add_argument("--profile", type=Path, help="profile that enables networked and model stages")
     convert.add_argument("--no-profile", action="store_true", help="ignore every profile; run the local pipeline only")
+    convert.add_argument("--config", type=Path, action="append", default=[], help="explicit composed configuration file (repeat in merge order)")
+    convert.add_argument("--config-root", type=Path, help="confine explicit configuration files and includes to this directory")
     convert.add_argument("--stages", help="comma-separated stages to run; others in the profile are skipped")
     convert.add_argument("--skip", help="comma-separated stages to skip")
     convert.add_argument("--no-ai", action="store_true", help="run no stage that uses an endpoint")
@@ -120,6 +123,21 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _cmd_convert(args: argparse.Namespace) -> int:
+    try:
+        if args.config and (args.profile is not None or args.no_profile):
+            raise ProfileError("--config conflicts with --profile and --no-profile")
+        configuration = load_configuration(args.config, root=args.config_root, local_only=args.local_only, no_ai=args.no_ai)
+    except ProfileError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    except (OSError, ValueError):
+        print("error: invalid explicit configuration or conflicting configuration options", file=sys.stderr)
+        return EXIT_USAGE
+    with configuration_context(configuration):
+        return _cmd_convert_scoped(args, configuration)
+
+
+def _cmd_convert_scoped(args: argparse.Namespace, configuration: Configuration) -> int:
     if args.searchable_pdf is not None and args.skip_preflight:
         print("error: --searchable-pdf requires the preflight; drop --skip-preflight", file=sys.stderr)
         return EXIT_USAGE
@@ -133,7 +151,7 @@ def _cmd_convert(args: argparse.Namespace) -> int:
             language=args.lang, tessdata_dir=args.tessdata_dir,
         )
     try:
-        active = resolve_profile(args.profile, no_profile=args.no_profile)
+        active = configuration.profile if configuration.files else resolve_profile(args.profile, no_profile=args.no_profile)
         media_type, _ = sniff_media_type(args.pdf)
         split = lambda value: [item.strip() for item in value.split(",") if item.strip()] if value else None  # noqa: E731
         plan = build_plan(active, media_type, only=split(args.stages), skip=split(args.skip) or (), no_ai=args.no_ai, local_only=args.local_only)
@@ -144,7 +162,10 @@ def _cmd_convert(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_USAGE
     if args.dry_run:
-        print(json.dumps(plan_report(args.pdf, active, plan, media_type), indent=2))  # a recording is measured locally; nothing is sent
+        report = plan_report(args.pdf, active, plan, media_type)
+        if configuration.files:
+            report["configuration"] = configuration.report()
+        print(json.dumps(report, indent=2))  # a recording is measured locally; nothing is sent
         return EXIT_OK
     options = ConversionOptions(
         title=args.title,

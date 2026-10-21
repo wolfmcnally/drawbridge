@@ -12,10 +12,19 @@ wheels = [
 ]
 
 [[package]]
-name = "drawbridge"
+name = "conric"
 version = "0.1.0"
+source = { git = "https://github.com/wolfmcnally/conric.git?rev=ed9286297e92b8c049f70eb15a3b5556ed107ff0#ed9286297e92b8c049f70eb15a3b5556ed107ff0" }
+dependencies = [
+    { name = "pyyaml" },
+]
+
+[[package]]
+name = "drawbridge"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
+    { name = "conric" },
     { name = "olefile" },
     { name = "openpyxl" },
     { name = "pillow" },
@@ -37,6 +46,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "conric", git = "https://github.com/wolfmcnally/conric.git?rev=ed9286297e92b8c049f70eb15a3b5556ed107ff0" },
     { name = "olefile", specifier = ">=0.47" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pillow", specifier = ">=11.3,<13" },

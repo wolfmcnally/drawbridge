@@ -388,6 +388,14 @@ def convert_file(
     flags: list[str] = []
     if media_type is None:
         media_type, flags = sniff_media_type(path)
+    from .configuration import configuration_active, current_configuration
+
+    configuration = current_configuration()
+    if configuration_active():
+        profile = profile if profile is not None else configuration.profile
+        # A caller's plan may narrow the scoped policy, never widen it.
+        plan = build_plan(profile, media_type, restrictions=plan,
+                          local_only=configuration.local_only, no_ai=configuration.no_ai)
     if flags:
         options = options.with_verify(flags)
     if media_type == PDF_MEDIA_TYPE:

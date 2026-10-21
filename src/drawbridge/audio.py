@@ -26,7 +26,7 @@ from .convert import ConversionOptions
 from .calls import ModelCall, report
 from .errors import ConversionOperationalError, ConverterUnavailable, DrawbridgeError
 from .mirror import Mirror, build_header, now_iso, parse_mirror_header, render_mirror, title_from_name
-from .profile import Plan, Profile, ProfileError
+from .profile import Plan, Profile, ProfileError, materialize_settings
 from .progress import advance
 
 VIDEO_FLAG = "video-visual-content-not-captured"
@@ -148,7 +148,7 @@ def _dependency_options(profile: Profile, package_dir: Path, decision: AudioDeci
     if cleanup.get("preset"):
         options += ["--auphonic-config", str(Path(str(cleanup["preset"])).expanduser())]
     for key, value in (cleanup.get("settings") or {}).items():
-        options += ["--auphonic-set", f"{key}={json.dumps(value)}"]
+        options += ["--auphonic-set", f"{key}={json.dumps(materialize_settings(value))}"]
     if cleanup.get("bitrate_kbps"):
         options += ["--mp3-bitrate", str(int(cleanup["bitrate_kbps"]))]
     if stage.get("model"):

@@ -42,6 +42,6 @@ from .pdf_tools import (
     page_texts,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [name for name in dir() if not name.startswith("_")]

@@ -137,7 +137,7 @@ class Profile:
                 }
                 for name, endpoint in self.endpoints.items()
             },
-            "stages": {name: dict(stage) for name, stage in self.stages.items()},
+            "stages": materialize_settings(self.stages),
             "limits": {
                 "max_pages_per_document": self.limits.max_pages_per_document,
                 "max_audio_minutes": self.limits.max_audio_minutes,
@@ -148,6 +148,15 @@ class Profile:
 
 
 EMPTY_PROFILE = Profile(path=None)
+
+
+def materialize_settings(value: Any) -> Any:
+    """Detach immutable settings into ordinary containers at serialization boundaries."""
+    if isinstance(value, Mapping):
+        return {key: materialize_settings(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [materialize_settings(item) for item in value]
+    return value
 
 
 def locate_profile(explicit: Path | None = None, *, cwd: Path | None = None, environ: Mapping[str, str] | None = None) -> Path | None:
@@ -348,31 +357,47 @@ def build_plan(
     skip: Iterable[str] = (),
     no_ai: bool = False,
     local_only: bool = False,
+    restrictions: Plan | None = None,
 ) -> Plan:
-    """Decide which stages run for one input. Raises ``EgressRefused`` when ``local_only`` forbids the plan."""
+    """Decide stages for one input; ``restrictions`` can only narrow each stage's runs/model use.
+
+    Raises ``EgressRefused`` before credential inspection when ``local_only`` forbids the plan.
+    """
     only_set, skip_set = (set(only) if only is not None else None), set(skip)
     for name in (only_set or set()) | skip_set:
         if name not in _STAGES:
             raise ProfileError(f"unknown stage {name}; stages are {', '.join(STAGE_NAMES)}")
     classes = media_classes(media_type)
+    previous = {item.stage: item for item in restrictions.stages} if restrictions is not None else None
     planned: list[StagePlan] = []
     for name, stage in profile.stages.items():
         endpoint = profile.endpoint_for(name)
+        prior = previous.get(name) if previous is not None else None
+        suppress_model = no_ai or (prior is not None and not prior.model)
         applies = set(stage.get("applies_to") or _STAGES[name]["default"])
-        detail = dict(endpoint=endpoint.name if endpoint else None, egress=endpoint.egress if endpoint else "local", key_set=endpoint.key_is_set if endpoint else None)
-        if not applies & classes:
+        # Policy is decided before credential presence is inspected, including for disabled stages.
+        detail = dict(endpoint=endpoint.name if endpoint else None, egress=endpoint.egress if endpoint else "local", key_set=None, model=prior.model if prior else True)
+        if previous is not None and (prior is None or not prior.runs):
+            planned.append(StagePlan(name, False, "disabled by the caller's plan", **detail))
+        elif not applies & classes:
             planned.append(StagePlan(name, False, "does not apply to this media type", **detail))
         elif only_set is not None and name not in only_set:
             planned.append(StagePlan(name, False, "not named in --stages", **detail))
         elif name in skip_set:
             planned.append(StagePlan(name, False, "skipped by --skip", **detail))
-        elif no_ai and endpoint is not None and name == "structure" and stage.get("native_pass", "deterministic") == "deterministic":
-            planned.append(StagePlan(name, True, "typography pass only; the model is suppressed by --no-ai", endpoint=None, egress="local", key_set=None, model=False))
-        elif no_ai and endpoint is not None:
-            planned.append(StagePlan(name, False, "suppressed by --no-ai", **detail))
+        elif suppress_model and endpoint is not None and name == "structure" and stage.get("native_pass", "deterministic") == "deterministic":
+            reason = "typography pass only; the model is suppressed by --no-ai" if no_ai else "typography pass only; the caller suppressed the model"
+            planned.append(StagePlan(name, True, reason, endpoint=None, egress="local", key_set=None, model=False))
+        elif suppress_model and endpoint is not None:
+            planned.append(StagePlan(name, False, "suppressed by --no-ai" if no_ai else "suppressed by the caller's model policy", **detail))
         else:
             planned.append(StagePlan(name, True, "profile enables it", **detail))
     plan = Plan(media_type, tuple(planned))
     if local_only and plan.cloud_stages:
         raise EgressRefused(f"--local-only refuses {', '.join(plan.cloud_stages)}: each would send bytes off this machine", plan)
-    return plan
+    return Plan(media_type, tuple(
+        StagePlan(item.stage, item.runs, item.reason, item.endpoint, item.egress,
+                  profile.endpoints[item.endpoint].key_is_set if item.runs and item.endpoint else None,
+                  item.model)
+        for item in plan.stages
+    ))

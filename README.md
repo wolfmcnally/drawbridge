@@ -1,6 +1,6 @@
 # Drawbridge
 
-Any file in, one Markdown mirror out. A mirror is a plain-text twin of a document: a YAML provenance header that names the exact bytes it was made from, then the document's text in sections that match the original's own units (pages, sheets, a message). Local fidelity conversion preserves the input and ends in an inspectable mirror, typed failure or truthful deferred stub. Optional audio/model stages require explicit profiles and report their egress. The first public candidate is **0.1.0**, under **MIT**.
+Any file in, one Markdown mirror out. A mirror is a plain-text twin of a document: a YAML provenance header that names the exact bytes it was made from, then the document's text in sections that match the original's own units (pages, sheets, a message). Local fidelity conversion preserves the input and ends in an inspectable mirror, typed failure or truthful deferred stub. Optional audio/model stages require explicit profiles or composed configuration and report their egress. The current candidate is **0.2.0**, under **MIT**.
 
 | Input | How | Sections |
 |---|---|---|
@@ -26,17 +26,19 @@ No headings, tables, links or columns are reconstructed in the mirror. It is a p
 
 ## Quick start
 
-With Python 3.12+ and uv, from the downloaded wheel directory:
+With Python 3.12+, uv, Git and network access to the pinned public Conric source, from the downloaded wheel directory:
 
 ```bash
 uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python ./drawbridge-0.1.0-py3-none-any.whl
+uv pip install --python .venv/bin/python ./drawbridge-0.2.0-py3-none-any.whl
 .venv/bin/drawbridge --version
 printf 'Plain local evidence.\n' > example.txt
 .venv/bin/drawbridge convert example.txt --no-profile --stdout
 ```
 
-PDF conversion requires independently installed Vellric 0.1.0; configure DRAWBRIDGE_VELLRIC to its trusted executable. Drawbridge runtime contains no PyMuPDF or Vellric import/dependency. Pillow handles images; image OCR needs Tesseract. No sibling checkout is required.
+PDF conversion requires independently installed Vellric; configure DRAWBRIDGE_VELLRIC to its trusted executable. This candidate targets the public regular [Vellric v0.2.2 release](https://github.com/wolfmcnally/vellric/releases/tag/v0.2.2) at commit `18c89b9ede1ec5cf3dbf198fed7fbac7c67945ae`, with exact artifact hashes recorded in the installation guide and CI. Cloud-vision human acceptance and Windows desktop acceptance remain open upstream. Drawbridge runtime contains no PyMuPDF or Vellric import/dependency. Pillow handles images; image OCR needs Tesseract. No sibling checkout is required.
+
+The publication target for this candidate is GitHub Releases, not a package index: its runtime metadata pins Conric by an exact Git URL. A registry Conric release and dependency migration would be needed before a PyPI upload.
 
 [Installation/platform prerequisites](docs/INSTALLATION.md) · [Worked examples](docs/EXAMPLES.md) · [CLI/API/configuration](docs/USAGE.md) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [Licensing/boundary](docs/LICENSING.md)
 
@@ -133,7 +135,7 @@ Quillric 0.1.0 is absent from PyPI at preparation. Its exact locked Git commit i
 ```bash
 uv venv --python 3.12 .venv-audio
 uv pip install --python .venv-audio/bin/python 'quillric @ git+https://github.com/wolfmcnally/quillric.git@c48b76e522f4e677df9184a2e82469ddcdb9cee9'
-uv pip install --python .venv-audio/bin/python './drawbridge-0.1.0-py3-none-any.whl[audio]'
+uv pip install --python .venv-audio/bin/python './drawbridge-0.2.0-py3-none-any.whl[audio]'
 .venv-audio/bin/drawbridge --version
 ```
 
@@ -230,6 +232,6 @@ Vellric supervises its worker and recognizers, but this process boundary is not 
 
 ### Prepared local release build
 
-The local candidate is Drawbridge 0.1.0. Build with `SOURCE_DATE_EPOCH=1609459200 uv build . --python 3.12 --build-constraints build-constraints.txt`. Its source includes uv.lock, exact build constraints and NOTICE, including separate public fixture grants. Publish this candidate only after the tested Vellric 0.1.0 commit/artifacts are publicly reachable. Live consumer upgrades remain separately authorized.
+The local candidate is Drawbridge 0.2.0. Build with `SOURCE_DATE_EPOCH=1609459200 uv build . --python 3.12 --build-constraints build-constraints.txt`. Its source includes uv.lock, exact build constraints and NOTICE, including separate public fixture grants. As of 2026-10-21, Vellric 0.2.2 is publicly released; Drawbridge's CI selects its exact wheel and matching source archive by hash. Publish this candidate only after its required independent review, tests, security, license and release gates, including qualification against those final dependency artifacts. Live consumer upgrades remain separately authorized.
 
 Optional audio installation uses the publicly reachable pinned Quillric source shown above; Quillric 0.1.0 is absent from PyPI at preparation. The core quickstart and PDF boundary do not require it. See [the installation guide](docs/INSTALLATION.md).

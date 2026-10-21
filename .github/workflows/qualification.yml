@@ -8,11 +8,16 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: wolfmcnally/vellric
-          ref: a2b140a4eda87b4e6cb5925ba5e605031890fb31
-          path: .ci-vellric-source
+      - name: Fetch the exact Vellric 0.2.2 release
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/wolfmcnally/vellric/releases/download/v0.2.2/vellric-0.2.2-py3-none-any.whl -o "$RUNNER_TEMP/vellric-0.2.2-py3-none-any.whl"
+          curl -fsSL https://github.com/wolfmcnally/vellric/releases/download/v0.2.2/vellric-0.2.2.tar.gz -o "$RUNNER_TEMP/vellric-0.2.2.tar.gz"
+          echo "d72d5e908b23be1e4c0b5b84dc1b8e1e3dc2cfed256095d666dcfb1bc2136121  $RUNNER_TEMP/vellric-0.2.2-py3-none-any.whl" | sha256sum --check
+          echo "042dc2898ffd8c9d81d090f7ba4a66ce1fa349e34986bd189e476ee9ec0748a4  $RUNNER_TEMP/vellric-0.2.2.tar.gz" | sha256sum --check
+          mkdir "$RUNNER_TEMP/vellric-source"
+          tar -xzf "$RUNNER_TEMP/vellric-0.2.2.tar.gz" -C "$RUNNER_TEMP/vellric-source" --strip-components=1
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
         with:
           version: "0.9.26"
@@ -38,18 +43,20 @@ jobs:
           echo "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff  $RUNNER_TEMP/ocr/share/tessdata/osd.traineddata" | sha256sum --check
           echo "$RUNNER_TEMP/ocr/bin" >> "$GITHUB_PATH"
           echo "TESSDATA_PREFIX=$RUNNER_TEMP/ocr/share/tessdata" >> "$GITHUB_ENV"
-      - name: Independently install the qualified Vellric source
+      - name: Independently install the exact Vellric release wheel
         shell: bash
         run: |
           set -euo pipefail
           uv venv --python 3.12.12 "$RUNNER_TEMP/vellric-runtime"
-          uv export --locked --project .ci-vellric-source/project --extra ocr --no-dev --no-emit-project --format requirements-txt --output-file "$RUNNER_TEMP/vellric-requirements.txt"
-          uv pip install --python "$RUNNER_TEMP/vellric-runtime/bin/python" --require-hashes --requirements "$RUNNER_TEMP/vellric-requirements.txt"
-          uv pip install --python "$RUNNER_TEMP/vellric-runtime/bin/python" --no-deps --build-constraints .ci-vellric-source/project/build-constraints.txt .ci-vellric-source/project
+          uv export --locked --project "$RUNNER_TEMP/vellric-source" --extra ocr --no-dev --no-emit-project --format requirements-txt --output-file "$RUNNER_TEMP/vellric-requirements.txt"
+          "$RUNNER_TEMP/vellric-runtime/bin/python" scripts/split_conric_requirements.py "$RUNNER_TEMP/vellric-requirements.txt" "$RUNNER_TEMP/vellric-registry-requirements.txt"
+          uv pip install --python "$RUNNER_TEMP/vellric-runtime/bin/python" --require-hashes --requirements "$RUNNER_TEMP/vellric-registry-requirements.txt"
+          uv pip install --python "$RUNNER_TEMP/vellric-runtime/bin/python" --no-deps --build-constraints "$RUNNER_TEMP/vellric-source/build-constraints.txt" 'conric @ git+https://github.com/wolfmcnally/conric.git@ed9286297e92b8c049f70eb15a3b5556ed107ff0'
+          uv pip install --python "$RUNNER_TEMP/vellric-runtime/bin/python" --no-deps "$RUNNER_TEMP/vellric-0.2.2-py3-none-any.whl"
           ln -s "$RUNNER_TEMP/ocr/bin/tesseract" "$RUNNER_TEMP/vellric-runtime/bin/tesseract"
           echo "DRAWBRIDGE_VELLRIC=$RUNNER_TEMP/vellric-runtime/bin/vellric" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/vellric-runtime/bin" >> "$GITHUB_PATH"
       - name: Install locked fixture dependencies
-        run: uv sync --locked
+        run: uv sync --locked --python 3.12.12
       - name: Qualify every Drawbridge test
         run: uv run --locked pytest -q
