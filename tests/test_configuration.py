@@ -158,7 +158,7 @@ def test_concurrent_tasks_and_new_threads_have_explicit_context_semantics():
             assert executor.submit(current_configuration).result().no_ai is False
 
 
-def test_forward_original_paths_and_explicit_restrictions_only_to_convert(tmp_path):
+def test_forward_original_paths_and_explicit_restrictions_only_to_convert(tmp_path, monkeypatch):
     first = config_file(tmp_path, name="first.yaml")
     second = config_file(tmp_path, name="second.yaml")
     selected = load_configuration([second, first, second], root=tmp_path, local_only=True, no_ai=True)
@@ -170,6 +170,8 @@ def test_forward_original_paths_and_explicit_restrictions_only_to_convert(tmp_pa
             assert "--config" not in _vellric.configured_options((), command=command)
             assert "--local-only" not in _vellric.configured_options((), command=command)
         assert _vellric.configured_options(("--vision-provider", "synthetic"))[-2:] == ("--vision-provider", "none")
+    monkeypatch.delenv("TESSDATA_PREFIX", raising=False)
+    monkeypatch.delenv("DRAWBRIDGE_VELLRIC_TESSDATA_DIR", raising=False)
     with configuration_context(Configuration(local_only=True, no_ai=True)):
         assert _vellric.configured_options(()) == ()
 
