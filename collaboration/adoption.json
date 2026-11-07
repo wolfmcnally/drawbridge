@@ -1,0 +1,94 @@
+{
+  "schema": "drawbridge.methodology-adoption.v1",
+  "as_of": "2026-11-07",
+  "state": "applied; renewed live qualification pending worker-cache correction",
+  "previous_baseline": "outside",
+  "source": {
+    "repository": "https://github.com/wolfmcnally/starter.git",
+    "release": "v1.0.0",
+    "commit": "aa89d21c0972570398e6da29a0dde6ea06c1c8ed",
+    "tag_signature": "verified-good"
+  },
+  "receiver_baseline_commit": "d6b35c0448a4f799c8f79e6c5950567332bc1908",
+  "preservation": {
+    "original_files_unchanged_except_approved_metadata_fixture_and_ci": 79,
+    "historical_plans_unchanged": 7,
+    "private_evidence": "retained in original custody; never copied into public source",
+    "prior_review_budgets": "retained; no active product review transferred or reset"
+  },
+  "qualification": {
+    "structural_rehearsal": "passed; no imported historical events or log",
+    "focused_checks": "passed; complete diagnostics retained privately",
+    "proof_estate": "initial local baseline pending bounded review; two admissions, thirteen modifications and eighteen actual witness observations",
+    "full_gate": {
+      "venue": "isolated receiving qualification checkout",
+      "result": "537 passed; all policy/docs gates passed; no skips",
+      "candidate": "5fb198dd008c584b82e21806eca93a173763848cc887d44b3b01e18a641179e1",
+      "stdout_sha256": "780a9fbea1abfa944bf604f01499e3c4b137c93dd2ebeb51eb26dd70d13268cf",
+      "warnings": "15 inherited development SWIG warnings across pytest processes and interpreter-exit diagnostics; known admonish compiled0.4.40 versus mdbook0.4.50 warning; curated docs validated"
+    },
+    "installed_artifacts": {
+      "venue": "fresh isolated offline MIT runtime",
+      "result": "native2pages/configured2pages/realOCR1page passed with exact source identity and anchors; Vellric/PyMuPDF/fitz absent from MIT runtime",
+      "wheel_sha256": "ec4267520c74407a820e09d534d4d705f96509587e4bbcdef9f1160a1ef49dcd",
+      "sdist_sha256": "2739289f7a91a463485101a1572708d918eb829f0057cd28a8188fd6b110797f",
+      "publication": "none; package version0.2.0 unchanged"
+    },
+    "staged_partition_refusal": "observed with clean live declaration and invalid indexed bytes",
+    "changed_gate": {
+      "venue": "isolated receiving qualification checkout",
+      "result": "537 passed; no skips",
+      "candidate": "5fb198dd008c584b82e21806eca93a173763848cc887d44b3b01e18a641179e1",
+      "stdout_sha256": "e45f0eb97ff870bc5422db0fa8f078267e274d3b2cb7098b2d0b080a58f60963"
+    },
+    "dependency_correction": "authorized dev-only cosmic-ray8.7.0; prior pins/sources preserved; SHA256 registry artifacts checked; exact-version OSV lookup had no listed advisories on2026-11-07; three synthetic tool tests passed",
+    "live_cutover": "exact qualified candidate identity verified after apply; setup/structured validation/retirement/private capture verification passed",
+    "final_live_handoff": "first live gate failed with 530 passed/7 failed and unchanged source identity; no commit/push; renewed gate pending",
+    "failures": "all three earlier stopped attempts and their diagnostics retained privately; no failed receipt promoted",
+    "current_implementation": "worker-owned private uv caches added after failed live gate; prior implementation/full receipts remain historical, renewed changed/full/package proof pending",
+    "cache_correction": "same seven cases: parallel before2fail/5pass, serial7pass, partitioned parallel7pass; same Python3.12.12; no original test assertion, dependency or worker-count change"
+  },
+  "instruction_loading": {
+    "candidate_constitution": "explicitly read by receiving primary",
+    "live_constitution": "exact reviewed regular AGENTS explicitly read by actual receiving primary after cutover; no root CLAUDE alias",
+    "automatic_native_loading": "not-observed"
+  },
+  "actual_adoption": true,
+  "receiving_lessons": {
+    "donor_lessons_harvested": 0,
+    "donor_ledger_inspection": "not performed; no harvest or absence claimed",
+    "application_found_candidates": [
+      {
+        "path": "lessons/hairy-orca.md",
+        "title": "Freeze the selected interpreter before isolating test HOME",
+        "occurrences": 1
+      },
+      {
+        "path": "lessons/enlightened-cow.md",
+        "title": "Keep retained state outside the advertised test temporary root",
+        "occurrences": 1
+      },
+      {
+        "path": "lessons/venerable-cuscus.md",
+        "title": "Audit imported tool proofs independently of the active tool profile",
+        "occurrences": 1
+      },
+      {
+        "path": "lessons/ninja-mammoth.md",
+        "title": "Verify the complete gate under its actual launcher environment",
+        "occurrences": 1
+      },
+      {
+        "path": "lessons/controversial-jellyfish.md",
+        "title": "Relocate catalog writers together with readers and valid-operation proofs",
+        "occurrences": 1
+      },
+      {
+        "path": "lessons/merciful-aardwolf.md",
+        "title": "Give parallel tests independent self-provisioning script caches",
+        "occurrences": 1
+      }
+    ],
+    "graduated": 0
+  }
+}

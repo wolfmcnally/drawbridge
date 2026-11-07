@@ -1,0 +1,16 @@
+[tools]
+mdbook = "0.4.50"
+admonish = "1.19.0"
+rust = "1.91.1"
+
+[book]
+directory = "manual"
+
+[preview]
+port = 3029
+
+[deploy]
+repository = "wolfmcnally/drawbridge"
+release_branch = "master"
+workflow = "docs-pages.yml"
+url = ""

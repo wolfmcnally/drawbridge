@@ -36,9 +36,13 @@ Homepage = "https://github.com/wolfmcnally/drawbridge"
 
 [dependency-groups]
 dev = [
+  "ruff>=0.6",
+  "pytest-xdist>=3.8,<4",
+  "ruamel.yaml>=0.18,<0.19",
   "pymupdf==1.28.2", # Development-only fixture authoring and native lock proofs; never installed by the MIT runtime.
   "pytest>=8.3",
   "quillric>=0.1.0",
+  "cosmic-ray==8.7.0",
 ]
 
 [tool.uv.sources]
@@ -63,4 +67,17 @@ addopts = "-ra"
 
 [tool.hatch.build.targets.sdist]
 # Hatchling writes canonical metadata; do not re-add the extracted copy.
-exclude = ["/PKG-INFO"]
+include = ["/src/drawbridge/**", "/.python-version", "/LICENSE", "/LICENSES/CC-BY-SA-4.0.txt", "/NOTICE", "/README.md", "/briefs/design.md", "/briefs/powerpoint-ingestion.md", "/briefs/profile.md", "/briefs/word-page-citations.md", "/build-constraints.txt", "/docs/EXAMPLES.md", "/docs/INSTALLATION.md", "/docs/LICENSING.md", "/docs/PAGE-CITATIONS.md", "/docs/TROUBLESHOOTING.md", "/docs/USAGE.md", "/drawbridge", "/plan/01-every-file-type.md", "/plan/02-profile-and-networked-stages.md", "/plan/03-one-lock-for-pymupdf.md", "/plan/04-progress-reports.md", "/plan/05-conric-configuration.md", "/plan/06-pdf-page-citations.md", "/plan/README.md", "/pyproject.toml", "/scripts/split_conric_requirements.py", "/tests/conftest.py", "/tests/fixtures/MANIFEST.md", "/tests/fixtures/cardinal.pdf", "/tests/fixtures/ccitt.pdf", "/tests/fixtures/graph_ocred.pdf", "/tests/fixtures/invalid.pdf", "/tests/fixtures/rfc8785.pdf", "/tests/fixtures/trivial.pdf", "/tests/office_fixtures.py", "/tests/test_audio.py", "/tests/test_calls.py", "/tests/test_cli.py", "/tests/test_configuration.py", "/tests/test_configuration_integration.py", "/tests/test_convert.py", "/tests/test_describe.py", "/tests/test_documents.py", "/tests/test_identify.py", "/tests/test_installation.py", "/tests/test_live.py", "/tests/test_mirror.py", "/tests/test_native.py", "/tests/test_native_fingerprints.py", "/tests/test_ocr.py", "/tests/test_orientation.py", "/tests/test_page_citations.py", "/tests/test_pdf_tools.py", "/tests/test_profile.py", "/tests/test_refine.py", "/tests/test_structure.py", "/tests/test_vellric.py", "/uv.lock"]
+exclude = ["/PKG-INFO", "/local/**", "/.env", "/.kickoff/**", "/tests/proof-estate.yaml", "/tests/structured_fixtures.py", "/tests/test_drawbridge_methodology_adoption.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["scripts/split_conric_requirements.py", "src/drawbridge/__init__.py", "src/drawbridge/__main__.py", "src/drawbridge/_vellric.py", "src/drawbridge/audio.py", "src/drawbridge/calls.py", "src/drawbridge/citations.py", "src/drawbridge/cli.py", "src/drawbridge/configuration.py", "src/drawbridge/convert.py", "src/drawbridge/describe.py", "src/drawbridge/documents.py", "src/drawbridge/errors.py", "src/drawbridge/identify.py", "src/drawbridge/images.py", "src/drawbridge/mirror.py", "src/drawbridge/native.py", "src/drawbridge/ocr.py", "src/drawbridge/office.py", "src/drawbridge/orientation.py", "src/drawbridge/pdf_tools.py", "src/drawbridge/profile.py", "src/drawbridge/progress.py", "src/drawbridge/refine.py", "src/drawbridge/structure.py", "tests/office_fixtures.py", "tests/test_audio.py", "tests/test_calls.py", "tests/test_cli.py", "tests/test_configuration.py", "tests/test_configuration_integration.py", "tests/test_convert.py", "tests/test_describe.py", "tests/test_documents.py", "tests/test_identify.py", "tests/test_installation.py", "tests/test_live.py", "tests/test_mirror.py", "tests/test_native.py", "tests/test_native_fingerprints.py", "tests/test_ocr.py", "tests/test_orientation.py", "tests/test_page_citations.py", "tests/test_pdf_tools.py", "tests/test_profile.py", "tests/test_refine.py", "tests/test_structure.py", "tests/test_vellric.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Existing literal PDF xref rows require their trailing spaces; preserve fixture bytes.
+"tests/conftest.py" = ["W291"]

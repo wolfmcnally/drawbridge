@@ -57,6 +57,6 @@ jobs:
           echo "DRAWBRIDGE_VELLRIC=$RUNNER_TEMP/vellric-runtime/bin/vellric" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/vellric-runtime/bin" >> "$GITHUB_PATH"
       - name: Install locked fixture dependencies
-        run: uv sync --locked --python 3.12.12
+        run: ./bin/setup
       - name: Qualify every Drawbridge test
-        run: uv run --locked pytest -q
+        run: ./bin/test

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
@@ -7,6 +8,17 @@ import pymupdf
 import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def pytest_configure(config):
+    """Standalone uv script environments must not be rebuilt by another worker."""
+    private_root = os.environ.get("DRAWBRIDGE_TEST_UV_CACHE_ROOT")
+    if private_root:
+        worker = getattr(config, "workerinput", {}).get("workerid", "master")
+        cache = Path(private_root) / worker
+        cache.mkdir(parents=True, exist_ok=True)
+        os.environ["UV_CACHE_DIR"] = str(cache)
+
 
 MINIMAL_ZERO_PAGE_PDF = b"""%PDF-1.4
 1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
@@ -126,3 +138,14 @@ def zero_page_pdf(tmp_path: Path) -> Path:
     target = tmp_path / "zero.pdf"
     target.write_bytes(MINIMAL_ZERO_PAGE_PDF)
     return target
+
+
+@pytest.fixture
+def tmp_path():
+    """Owned private scratch shared by product and methodology fixture factories."""
+    import tempfile
+
+    parent = Path(__file__).resolve().parents[1] / ".kickoff" / "proof-runtime"
+    parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="case-", dir=parent) as directory:
+        yield Path(directory)

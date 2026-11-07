@@ -1,0 +1,21 @@
+{
+  "active_imports": [],
+  "adopted": true,
+  "format": "starter.multioperator.v1",
+  "historical_plans": {
+    "plan/01-every-file-type.md": "654eefce3c3a34806c13b86d957d4276caae53a2192021a34227d3ed6f767a5b",
+    "plan/02-profile-and-networked-stages.md": "a724f1998c0ce1b7db796ec1f3b453011f719e62a7676376b93c4cc3ba4b438d",
+    "plan/03-one-lock-for-pymupdf.md": "47bcdd76f43417c6dffaed2798f2db2c8d09d3fd43df559b91e985e52048b58f",
+    "plan/04-progress-reports.md": "2053b159d58fecfdd22f1139d6ae5863e74a46db55a149700c4d05273dccea38",
+    "plan/05-conric-configuration.md": "408caf8fb99809089f013c888884cfc43b1983fe338a2e885f2d8a67ae9c607b",
+    "plan/06-pdf-page-citations.md": "8ed0031c0a957e208aac448a2cfb17ea169634f7912b207e5465fba84edde6e3",
+    "plan/README.md": "a546b7066935f8e79476fb0a865c40a3735437168f5ceefc45115d7bf581921a"
+  },
+  "mode": "retrofit",
+  "original_log_bytes": 0,
+  "original_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "phase_mapping": {},
+  "source_archive_sha256": "a66b8122aa1bde674cc462e499c96ad864345fd7bb0809d9c9c8b3c6995a0d54",
+  "source_commit": "d6b35c0448a4f799c8f79e6c5950567332bc1908",
+  "writer": "drawbridge-maintainer"
+}

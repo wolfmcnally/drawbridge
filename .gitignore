@@ -12,3 +12,11 @@ tests/fixtures/out/
 # Private, never committed: keys, and real documents or recordings used for local testing.
 .env
 local/
+
+# Methodology runtime evidence and generated views
+.kickoff/
+.collaboration-views/
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.codex/cache/
+manual/book/
