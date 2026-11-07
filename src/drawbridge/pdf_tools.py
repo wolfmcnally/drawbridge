@@ -32,6 +32,7 @@ class PdfInspection:
     raster_coverage: tuple[float, ...] | None = field(default=None, repr=False, compare=False)
     geometry: tuple[dict, ...] | None = field(default=None, repr=False, compare=False)
     processor: dict = field(default_factory=dict, repr=False, compare=False)
+    page_anchors: tuple[str, ...] | None = field(default=None, repr=False, compare=False)
 
     def as_dict(self, *, include_page_texts: bool = False) -> dict:
         data = {
@@ -124,6 +125,7 @@ def inspection_from_bundle(bundle) -> PdfInspection:
             "behavior": m["behavior"],
             "processing_fingerprint": m["provenance"]["processing_fingerprint"],
         },
+        tuple(p["anchor"] for p in pages),
     )
 
 

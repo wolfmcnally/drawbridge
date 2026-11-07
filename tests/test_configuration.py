@@ -336,7 +336,8 @@ def native_admission(tmp_path, *, scan=False):
     text = "" if scan else "Native evidence.\n"
     inspection = PdfInspection(True, False, False, 1, bool(text), (text,),
                                _vellric.sha256_file(source), (1.0 if scan else 0.0,),
-                               ({"displayed_rect": [0, 0, 100, 100]},))
+                               ({"displayed_rect": [0, 0, 100, 100]},),
+                               page_anchors=("vellric-pdf-" + _vellric.sha256_file(source) + "-page-000001",))
     return source, IdentifyResult(str(source), "application/pdf", (), "processable", None, None, None, inspection)
 
 
@@ -353,7 +354,7 @@ def test_configured_native_complete_job_preserves_fidelity_and_provenance(tmp_pa
         native = ("changed",) if fault == "native-changed" else admission.inspection.page_texts
         final = ("changed",) if fault == "final-changed" else native
         manifest = {"outstanding_candidates": [1] if fault == "outstanding" else []}
-        bundle = SimpleNamespace(manifest=manifest, texts=final)
+        bundle = SimpleNamespace(manifest=manifest, texts=final, anchors=admission.inspection.page_anchors)
         bundle.inspection = PdfInspection(True, False, False, 1, True, native,
                                          processor={"processing_fingerprint": "qualified-convert"})
         yield bundle

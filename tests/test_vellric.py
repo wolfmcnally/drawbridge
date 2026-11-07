@@ -42,6 +42,7 @@ def bundle(tmp_path):
         "tool": {"name": "vellric", "version": "0.0.0"},
         "engines": {"pymupdf": "1.28.2", "mupdf": "1.28.2"},
         "source": {"sha256": "a" * 64, "size": 10},
+        "page_citations": {"schema": "vellric.pdf-page-citations/1.0"},
         "page_count": 1,
         "inspection": {
             "openable": True,
@@ -56,6 +57,7 @@ def bundle(tmp_path):
         "pages": [
             {
                 "number": 1,
+                "anchor": "vellric-pdf-" + "a" * 64 + "-page-000001",
                 "method": "pymupdf-text",
                 "ocr_candidate": False,
                 "raster_coverage": 0.0,
@@ -74,6 +76,27 @@ def bundle(tmp_path):
 def validate(bundle):
     root, m = bundle
     return _vellric.validate_bundle(root, m, job="inspect", source_hash="a" * 64, source_size=10)
+
+
+@pytest.mark.parametrize("fault", ["missing", "extra", "wrong-digest", "padding", "boolean", "legacy"])
+def test_pdf_citation_contract_refuses(bundle, fault):
+    _, m = bundle
+    if fault == "missing": del m["page_citations"]
+    elif fault == "extra": m["page_citations"]["extra"] = 1
+    elif fault == "wrong-digest": m["pages"][0]["anchor"] = "vellric-pdf-" + "b" * 64 + "-page-000001"
+    elif fault == "padding": m["pages"][0]["anchor"] += "0"
+    elif fault == "boolean": m["pages"][0]["number"] = True
+    elif fault == "legacy": m["schema"] = "vellric.document/1.0"
+    with pytest.raises(ConversionOperationalError, match="independent validation"):
+        validate(bundle)
+
+
+def test_image_job_forbids_pdf_fields(bundle):
+    root, m = bundle
+    m["job"] = "image"
+    m["pages"][0]["method"] = "native-image"
+    with pytest.raises(ConversionOperationalError, match="independent validation"):
+        _vellric.validate_bundle(root, m, job="image", source_hash="a" * 64, source_size=10)
 
 
 def test_complete_bundle_reads_exact_text_and_allows_parent_alias(bundle, tmp_path):

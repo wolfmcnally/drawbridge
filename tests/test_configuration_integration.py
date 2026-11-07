@@ -36,6 +36,10 @@ def test_actual_native_cli_and_api_keep_fidelity_text(native_pdf, tmp_path, caps
     header, body = parse_mirror_header(output)
     assert body == parse_mirror_header(render_mirror(baseline.mirror))[1]
     assert header["processing"][0]["method"] == baseline.mirror.header["processing"][0]["method"]
+    from drawbridge.citations import split
+
+    assert split(header, body)[2] == split(baseline.mirror.header, baseline.mirror.body)[2]
+    assert len(split(header, body)[2]) == 2
 
 
 @pytest.mark.parametrize("repeat_first,expected", [(False, False), (True, True)])

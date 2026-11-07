@@ -31,6 +31,7 @@ class OcrResult:
     recovered: tuple[RecoveredPage, ...]
     searchable_pdf: Path | None = None
     processor: dict = field(default_factory=dict)
+    page_anchors: tuple[str, ...] | None = None
 
 
 class OcrBackend(Protocol):
@@ -288,7 +289,7 @@ class CliOcrBackend:
                 }
                 return (
                     inspection,
-                    OcrResult(bundle.texts, recovered, searchable, facts),
+                    OcrResult(bundle.texts, recovered, searchable, facts, tuple(p["anchor"] for p in m["pages"])),
                     facts,
                 )
 

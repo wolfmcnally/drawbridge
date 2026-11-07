@@ -8,16 +8,16 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Fetch the exact Vellric 0.2.2 release
+      - name: Fetch the exact Vellric 0.2.4 release
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL https://github.com/wolfmcnally/vellric/releases/download/v0.2.2/vellric-0.2.2-py3-none-any.whl -o "$RUNNER_TEMP/vellric-0.2.2-py3-none-any.whl"
-          curl -fsSL https://github.com/wolfmcnally/vellric/releases/download/v0.2.2/vellric-0.2.2.tar.gz -o "$RUNNER_TEMP/vellric-0.2.2.tar.gz"
-          echo "d72d5e908b23be1e4c0b5b84dc1b8e1e3dc2cfed256095d666dcfb1bc2136121  $RUNNER_TEMP/vellric-0.2.2-py3-none-any.whl" | sha256sum --check
-          echo "042dc2898ffd8c9d81d090f7ba4a66ce1fa349e34986bd189e476ee9ec0748a4  $RUNNER_TEMP/vellric-0.2.2.tar.gz" | sha256sum --check
+          curl -fsSL https://github.com/wolfmcnally/vellric/releases/download/v0.2.4/vellric-0.2.4-py3-none-any.whl -o "$RUNNER_TEMP/vellric-0.2.4-py3-none-any.whl"
+          curl -fsSL https://github.com/wolfmcnally/vellric/releases/download/v0.2.4/vellric-0.2.4.tar.gz -o "$RUNNER_TEMP/vellric-0.2.4.tar.gz"
+          echo "0799e067048b5ca34e5e68b088f976e3e2cc08bf84d1c9458d423f9a51d8cfc0  $RUNNER_TEMP/vellric-0.2.4-py3-none-any.whl" | sha256sum --check
+          echo "d10f806079f04e4a984781036f3f36c99a962409d96188af342d3ab1cdaa6f63  $RUNNER_TEMP/vellric-0.2.4.tar.gz" | sha256sum --check
           mkdir "$RUNNER_TEMP/vellric-source"
-          tar -xzf "$RUNNER_TEMP/vellric-0.2.2.tar.gz" -C "$RUNNER_TEMP/vellric-source" --strip-components=1
+          tar -xzf "$RUNNER_TEMP/vellric-0.2.4.tar.gz" -C "$RUNNER_TEMP/vellric-source" --strip-components=1
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
         with:
           version: "0.9.26"
@@ -52,7 +52,7 @@ jobs:
           "$RUNNER_TEMP/vellric-runtime/bin/python" scripts/split_conric_requirements.py "$RUNNER_TEMP/vellric-requirements.txt" "$RUNNER_TEMP/vellric-registry-requirements.txt"
           uv pip install --python "$RUNNER_TEMP/vellric-runtime/bin/python" --require-hashes --requirements "$RUNNER_TEMP/vellric-registry-requirements.txt"
           uv pip install --python "$RUNNER_TEMP/vellric-runtime/bin/python" --no-deps --build-constraints "$RUNNER_TEMP/vellric-source/build-constraints.txt" 'conric @ git+https://github.com/wolfmcnally/conric.git@ed9286297e92b8c049f70eb15a3b5556ed107ff0'
-          uv pip install --python "$RUNNER_TEMP/vellric-runtime/bin/python" --no-deps "$RUNNER_TEMP/vellric-0.2.2-py3-none-any.whl"
+          uv pip install --python "$RUNNER_TEMP/vellric-runtime/bin/python" --no-deps "$RUNNER_TEMP/vellric-0.2.4-py3-none-any.whl"
           ln -s "$RUNNER_TEMP/ocr/bin/tesseract" "$RUNNER_TEMP/vellric-runtime/bin/tesseract"
           echo "DRAWBRIDGE_VELLRIC=$RUNNER_TEMP/vellric-runtime/bin/vellric" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP/vellric-runtime/bin" >> "$GITHUB_PATH"

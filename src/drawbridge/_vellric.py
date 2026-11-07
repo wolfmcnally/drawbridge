@@ -30,7 +30,7 @@ from .errors import (
 from .mirror import sha256_file as _mirror_sha256_file
 from .progress import advance
 
-SCHEMA = "vellric.document/1.0"
+SCHEMA = "vellric.document/1.1"
 STATUS = "vellric.status/1.0"
 BEHAVIOR = "drawbridge-0.4.3-pymupdf-1.28.2/v1"
 
@@ -271,6 +271,10 @@ class Bundle:
     def texts(self) -> tuple[str, ...]:
         return tuple(self.text(p) for p in self.manifest["pages"])
 
+    @property
+    def anchors(self) -> tuple[str, ...]:
+        return tuple(p["anchor"] for p in self.manifest["pages"])
+
 
 def validate_bundle(
     root: Path, manifest: dict, *, job: str, source_hash: str, source_size: int
@@ -285,7 +289,7 @@ def validate_bundle(
             or manifest.get("job") != job
             or manifest.get("behavior") != BEHAVIOR
         ):
-            raise ValueError("unsupported complete manifest")
+            raise ValueError("unsupported complete manifest; rerun from the retained original with Vellric 0.2.4")
         if (
             manifest.get("tool", {}).get("name") != "vellric"
             or manifest.get("engines", {}).get("pymupdf") != "1.28.2"
@@ -310,6 +314,17 @@ def validate_bundle(
             or [p["number"] for p in pages] != list(range(1, count + 1))
         ):
             raise ValueError("page count/order mismatch")
+        from .citations import CITATIONS, anchor
+
+        if job == "image":
+            if "page_citations" in manifest or any("anchor" in p for p in pages):
+                raise ValueError("PDF citations on image job")
+        else:
+            if manifest.get("page_citations") != CITATIONS:
+                raise ValueError("missing or unsupported PDF citations")
+            for number, page in enumerate(pages, 1):
+                if type(page.get("number")) is not int or page.get("anchor") != anchor(source_hash, number):
+                    raise ValueError("invalid original PDF page anchor")
         if type(manifest.get("outstanding_candidates")) is not list or any(
             type(n) is not int or not 1 <= n <= count for n in manifest["outstanding_candidates"]
         ):
@@ -448,7 +463,7 @@ def validate_bundle(
         OSError,
         UnicodeError,
     ) as exc:
-        raise ConversionOperationalError("Vellric artifacts failed independent validation") from exc
+        raise ConversionOperationalError("Vellric artifacts failed independent validation; rerun a complete job from the retained original with qualified Vellric 0.2.4") from exc
 
 
 _DOCTOR_CACHE: dict[tuple, bool] = {}
@@ -486,7 +501,7 @@ def _check_doctor(exe: str, work: Path, require_configuration: bool = False) -> 
         or not isinstance(doctor.get("tool"), dict)
         or doctor["tool"].get("name") != "vellric"
     ):
-        raise ConverterUnavailable("Vellric CLI schema/behavior is unsupported")
+        raise ConverterUnavailable("Vellric CLI schema/behavior is unsupported; install qualified Vellric 0.2.4 and rerun from the retained original")
     if len(_DOCTOR_CACHE) >= 32:
         _DOCTOR_CACHE.pop(next(iter(_DOCTOR_CACHE)))
     supported = _configuration_supported(doctor)

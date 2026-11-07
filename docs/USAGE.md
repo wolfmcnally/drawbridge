@@ -2,6 +2,8 @@
 
 `drawbridge --help` and subcommand help define the public options. The main commands are convert, inspect, verify, profile and speakers. Conversion emits a provenance header plus unit-anchored fidelity text; source bytes are never rewritten. A separately requested structure stage derives another mirror and preserves the strict word gate.
 
+PDF mirrors targeting Vellric 0.2.4 carry validated original-digest/physical-page anchors and a separate page map. Use `page_sections(body, header=header)` for metadata-aware slices, including text with fake Markdown markers. See [physical page citations and safe downstream rendering](PAGE-CITATIONS.md). Combined Markdown is untrusted presentation; preserving anchor bytes does not qualify an HTML viewer or sanitizer.
+
 ```bash
 .venv/bin/drawbridge convert example.txt --no-profile --stdout
 .venv/bin/drawbridge convert input.pdf --no-profile -o input.md

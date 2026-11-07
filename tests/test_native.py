@@ -8,7 +8,7 @@ import pytest
 
 from drawbridge import cli
 from drawbridge.convert import convert_pdf
-from drawbridge.mirror import Mirror, build_header, page_body, parse_mirror_header, render_mirror
+from drawbridge.mirror import Mirror, build_header, page_body, page_sections, parse_mirror_header, render_mirror
 from drawbridge.native import candidates
 from drawbridge.pdf_tools import page_layouts
 from drawbridge.profile import ProfileError, build_plan, parse_profile
@@ -104,7 +104,8 @@ def test_typography_links_and_tables_become_markdown_with_no_word_changed(rich_p
     profile = parse_profile(LOCAL)
     mirror = run_structure(source, profile=profile, plan=build_plan(profile, "application/pdf"), source=rich_pdf)
     header, body = parse_mirror_header(render_mirror(mirror))
-    assert body == f"# Report\n\n## Page 1\n\n{EXPECTED}\n\n## Page 2\n\nA plain second page.\n"
+    assert page_sections(body, header=header) == [EXPECTED, "A plain second page."]
+    assert body.startswith('# Report\n\n<a id="vellric-pdf-')
     assert header["verify"] == []
     assert header["processing"][-1]["method"] == NATIVE_METHOD and header["processing"][-1]["egress"] == "local" and header["processing"][-1]["endpoint"] is None
     assert header["content_hash"] == parse_mirror_header(source)[0]["content_hash"]
@@ -163,7 +164,8 @@ def test_a_page_set_mostly_in_large_type_has_no_headings(tmp_path):
 
 def test_born_digital_pages_never_reach_the_model_and_scanned_pages_never_reach_the_typography_pass(rich_pdf, fixtures, tmp_path):
     header = build_header(rich_pdf, method="ocr", extra={"page_count": 2, "ocr_pages": [{"page": 2}]})
-    source = render_mirror(Mirror(header, page_body("Report", [parse_mirror_header(_fidelity(rich_pdf))[1].split("## Page 1\n\n")[1].split("\n\n## Page 2")[0], "Scanned words\nwrapped here."])))
+    native_header, native_body = parse_mirror_header(_fidelity(rich_pdf))
+    source = render_mirror(Mirror(header, page_body("Report", [page_sections(native_body, header=native_header)[0], "Scanned words\nwrapped here."])))
     profile = parse_profile({**MODEL, "limits": {"cache_dir": str(tmp_path / "routing-cache")}})
     seen = []
 

@@ -96,6 +96,7 @@ def fake_jobs(
             texts.append(final)
             p = {
                 "number": number,
+                "anchor": "vellric-pdf-" + "a" * 64 + f"-page-{number:06d}",
                 "geometry": {},
                 "raster_coverage": 1.0 if number in recovered else 0.0,
                 "method": "ocr" if number in recovered else "pymupdf-text",

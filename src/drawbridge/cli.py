@@ -310,7 +310,7 @@ def _cmd_verify(args: argparse.Namespace) -> int:
     ident = identify(args.pdf)
     page_count = ident.inspection.page_count if ident.inspection else None
     try:
-        sections = page_sections(body)
+        sections = page_sections(body, header=header)
     except MirrorFormatError as exc:
         problems.append(str(exc))
         sections = []

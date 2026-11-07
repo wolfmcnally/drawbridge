@@ -78,6 +78,7 @@ def convert_pdf(
     recovered: tuple[RecoveredPage, ...] = ()
     searchable: Path | None = None
     processor = ident.inspection.processor
+    anchors = ident.inspection.page_anchors
     if selected:
         from .configuration import ConfigurationError, current_configuration
 
@@ -104,6 +105,8 @@ def convert_pdf(
             ) from exc
         if len(result.pages) != expected:
             raise ConversionOperationalError("OCR returned an incomplete page sequence")
+        if result.page_anchors is not None and result.page_anchors != anchors:
+            raise ConversionOperationalError("OCR changed original PDF page citations")
         pages = list(result.pages)
         recovered = tuple(result.recovered)
         searchable = result.searchable_pdf
@@ -125,6 +128,8 @@ def convert_pdf(
                     raise ConversionOperationalError("PDF/native text changed after inspection")
                 if bundle.manifest["outstanding_candidates"]:
                     raise ConversionOperationalError("Vellric left OCR candidates outstanding")
+                if bundle.anchors != anchors:
+                    raise ConversionOperationalError("PDF/native page citations changed after inspection")
                 processor = configured_inspection.processor
         method = METHOD_NATIVE
     extra: dict[str, Any] = {
@@ -153,7 +158,16 @@ def convert_pdf(
     ):
         raise ConversionOperationalError("PDF changed after complete conversion")
     title = options.title or title_from_name(pdf_path.name)
-    mirror = Mirror(header, page_body(title, pages))
+    from .citations import CITATIONS, assemble
+
+    try:
+        body, mapping = assemble("# " + title.replace("\n", " ").replace("\r", " "), pages,
+                                 header["content_hash"][7:], anchors)
+    except ValueError as exc:
+        raise ConversionOperationalError("PDF page citation mapping is inconsistent") from exc
+    header["page_citations"] = dict(CITATIONS)
+    header["pdf_page_map"] = mapping
+    mirror = Mirror(header, body)
     return ConversionResult(
         mirror, ident, method, selected, recovered, searchable, extra
     )

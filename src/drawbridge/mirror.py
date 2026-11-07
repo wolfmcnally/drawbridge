@@ -125,6 +125,10 @@ def page_body(title: str, pages: Sequence[str]) -> str:
 
 
 def render_mirror(mirror: Mirror) -> str:
+    if "page_citations" in mirror.header or "pdf_page_map" in mirror.header:
+        from .citations import split
+
+        split(mirror.header, mirror.body)
     header = yaml.safe_dump(mirror.header, sort_keys=False, allow_unicode=True).strip()
     rendered = f"---\n{header}\n---\n\n{mirror.body.rstrip()}\n"
     return rendered.replace("\x00", "")
@@ -164,7 +168,12 @@ def parse_mirror_header(value: str | Path) -> tuple[dict[str, Any], str]:
         raise MirrorFormatError(f"unknown mirror unit: {header['unit']}")
     if not isinstance(header.get("extensions", {}), dict):
         raise MirrorFormatError("mirror extensions must be a mapping")
-    return header, match.group(2).lstrip("\n")
+    body = match.group(2).lstrip("\n")
+    if "page_citations" in header or "pdf_page_map" in header:
+        from .citations import split
+
+        split(header, body)
+    return header, body
 
 
 def mirror_text(body: bytes) -> str:
@@ -172,9 +181,16 @@ def mirror_text(body: bytes) -> str:
     return body.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n").lstrip("\n")
 
 
-def page_sections(body: str) -> list[str]:
-    """The text of each ``## Page N`` section, in order."""
-    parts = re.split(r"^## Page (\d+)\n", body, flags=re.M)
+def page_sections(body: str, *, header: dict | None = None) -> list[str]:
+    """Page text in order. Pass the header for authoritative citation-aware boundaries.
+
+    Body-only use is a legacy convenience, not an identity/security validator.
+    """
+    if header is not None and ("page_citations" in header or "pdf_page_map" in header):
+        from .citations import split
+
+        return split(header, body)[1]
+    parts = re.split(r'(?:^<a id="vellric-pdf-[0-9a-f]{64}-page-[0-9]+"></a>\n\n)?^## Page (\d+)\n', body, flags=re.M)
     sections: list[str] = []
     for index in range(1, len(parts), 2):
         expected = len(sections) + 1
@@ -184,7 +200,12 @@ def page_sections(body: str) -> list[str]:
     return sections
 
 
-def sections(body: str) -> list[tuple[str, str]]:
-    """Every ``## Heading`` section of a body as (heading, text), in order, whatever the unit."""
+def sections(body: str, *, header: dict | None = None) -> list[tuple[str, str]]:
+    """Sections in order; pass a PDF citation header for authoritative page boundaries.
+
+    Body-only use remains a legacy Markdown convenience, not a security parser.
+    """
+    if header is not None and ("page_citations" in header or "pdf_page_map" in header):
+        return [(f"Page {number}", text) for number, text in enumerate(page_sections(body, header=header), 1)]
     parts = re.split(r"^## (.+)\n", body, flags=re.M)
     return [(parts[i].strip(), parts[i + 1].strip("\n")) for i in range(1, len(parts), 2)]

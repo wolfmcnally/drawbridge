@@ -232,7 +232,17 @@ def semantic_mirror(
     and never reaches the model. ``model_pages`` says which of the remaining pages the model may see.
     """
     header, body = parse_mirror_header(fidelity_text)
-    parts = _HEADING.split(body)
+    cited = "pdf_page_map" in header
+    citation_texts = []
+    if cited:
+        from .citations import split
+
+        preamble, texts, destinations = split(header, body)
+        parts = [preamble]
+        for number, text in enumerate(texts, 1):
+            parts += [f"Page {number}", text]
+    else:
+        parts = _HEADING.split(body)
     rebuilt, fallbacks, used = [parts[0].rstrip("\n")], [], set()
     total = (len(parts) - 1) // 2
     advance("structure", 0, total)
@@ -250,6 +260,7 @@ def semantic_mirror(
         if reason:
             fallbacks.append(f"structure-fallback:{heading.strip()}")
         rebuilt += ["", f"## {heading}", "", groomed]
+        citation_texts.append(groomed)
         advance("structure", (index + 1) // 2, total)
     derived = dict(header)
     derived["derived_from"] = (
@@ -285,6 +296,12 @@ def semantic_mirror(
         )
     derived["processing"] = processing
     derived["verify"] = sorted({*header["verify"], *fallbacks})
+    if cited:
+        from .citations import assemble
+
+        rebuilt_body, mapping = assemble(preamble, citation_texts, header["content_hash"][7:], destinations)
+        derived["pdf_page_map"] = mapping
+        return Mirror(derived, rebuilt_body)
     return Mirror(derived, "\n".join(rebuilt))
 
 
@@ -318,7 +335,12 @@ def run_structure(
     if stage.get("preservation", "strict") != "strict":
         raise ProfileError("structure supports preservation: strict only")
     header, body = parse_mirror_header(fidelity_text)
-    count = len(_HEADING.findall(body))
+    if "pdf_page_map" in header:
+        from .citations import split
+
+        count = len(split(header, body)[1])
+    else:
+        count = len(_HEADING.findall(body))
     born_digital = native_pages(header, count)
     native: dict[int, list[str]] = {}
     if (
