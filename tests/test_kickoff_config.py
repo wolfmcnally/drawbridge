@@ -1600,3 +1600,235 @@ else:
         ), "READINESS PROBE GROUPING LOST: " + repr(
             (index, observed, rows, result.stderr, verified.stderr)
         )
+
+
+@pytest.mark.parametrize(
+    "case", ["admitted-event", "silent-event", "admission-refusal", "spawn-refusal"]
+)
+def test_registered_launch_admission_is_outside_execution_budget(tmp_path, monkeypatch, case):
+    """Check execution clocks, observable errors and distinct telemetry ordering."""
+    import importlib.machinery
+    import importlib.util
+    import types
+    from datetime import UTC, datetime
+
+    loader = importlib.machinery.SourceFileLoader("clock_case_" + uuid.uuid4().hex, str(MANAGER))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, loader.name, module)
+    monkeypatch.setattr(sys, "dont_write_bytecode", True)
+    loader.exec_module(module)
+    real_clock, real_popen = time.monotonic, subprocess.Popen
+    offset = 0
+    # Prompt output tests admission accounting, not interpreter startup speed.
+    # A larger fixture margin retains the old-placement falsifier via offset.
+    first_limit, hard_limit = (20, 40) if case == "admitted-event" else (2, 4)
+    admission_offset = 25 if case == "admitted-event" else 3
+    events, diagnostics, finished, owned = [], [], [], []
+    spans = {}
+
+    def clock():
+        return real_clock() + offset
+
+    def timestamp():
+        value = datetime.now(UTC).isoformat()
+        events.append(("timestamp", value))
+        events.append(("execution-boundary", real_clock()))
+        return value
+
+    def span_start(**fields):
+        identifier = str(len(spans) + 1)
+        spans[identifier] = {**fields, "at": clock()}
+        events.append(("span", fields["category"]))
+        return types.SimpleNamespace(trace_id="0" * 32, span_id=identifier)
+
+    prompt = tmp_path / "prompt.txt"
+    prompt.write_text("Synthetic clock boundary, no model call.\n")
+    stub = tmp_path / "stub.py"
+    stub.write_text(
+        "import json,time\n"
+        + (
+            "time.sleep(2.5)\n"
+            if case == "silent-event"
+            else "print(json.dumps({'type':'result','result':'ready'}),flush=True)\n"
+        )
+    )
+    command = [sys.executable, str(stub)]
+    args = module.build_parser().parse_args(
+        [
+            "watch",
+            "--role",
+            "reviewer",
+            "--venue",
+            "claude",
+            "--model",
+            "opus",
+            "--effort",
+            "default",
+            "--phase",
+            "synthetic",
+            "--prompt-file",
+            str(prompt),
+            "--result-file",
+            str(tmp_path / "result.txt"),
+            "--telemetry-role-registration",
+            str(tmp_path / "registration.json"),
+            "--first-event-timeout",
+            str(first_limit),
+            "--idle-timeout",
+            str(first_limit),
+            "--hard-timeout",
+            str(hard_limit),
+        ]
+    )
+    args.telemetry_trace_id = "0" * 32
+    args.telemetry_parent_span_id = "1" * 32
+    args.telemetry_operation = "role.plan-review"
+    args.telemetry_attempt = 1
+    document = {
+        "role_timeouts": {
+            "first_event_timeout_seconds": first_limit,
+            "roles": {
+                "reviewer": {
+                    "idle_timeout_seconds": first_limit,
+                    "hard_timeout_seconds": hard_limit,
+                    "claude_max_turns": 10,
+                }
+            },
+        }
+    }
+    claim = None
+    (tmp_path / "run.json").write_text(
+        json.dumps({"repository_root": str(tmp_path), "phase": "synthetic"})
+    )
+
+    def admission(argv, **kwargs):
+        nonlocal offset, claim
+        if argv[-1] == "--version":
+            return subprocess.CompletedProcess(argv, 0, "stub 1.0\n", "")
+        assert "start-advice" in argv
+        events.append(("admission", case))
+        # A deterministic clock offset avoids adding sleeps to every full run.
+        # The retained private real-time probe separately verifies this delay.
+        offset += admission_offset
+        if case != "admission-refusal":
+            claim = module.advisory.start(
+                tmp_path, "synthetic", tmp_path, "role.plan-review", 1, "clock fixture"
+            )
+            (tmp_path / "advice-launch-reviewer-1.json").write_text(json.dumps(claim))
+        return subprocess.CompletedProcess(
+            argv, 9 if case == "admission-refusal" else 0, "", "admission refused"
+        )
+
+    def spawn(argv, **kwargs):
+        assert argv == command and kwargs["start_new_session"]
+        events.append(("spawn", case))
+        if case == "spawn-refusal":
+            raise OSError("synthetic spawn refusal")
+        child = real_popen(argv, **kwargs)
+        owned.append(child)
+        # Each stub exits by itself. Every real PID is reaped before any
+        # timeout observation; the test never sends a process signal.
+        if case != "silent-event":
+            assert child.wait(timeout=first_limit) == 0
+        return child
+
+    def wait_only(child):
+        events.append(("timeout-observed", real_clock()))
+        assert child in owned and child.wait(timeout=2) == 0
+        return []
+
+    def no_signal(*_args, **_kwargs):
+        pytest.fail("CLOCK FIXTURE MUST NOT SIGNAL A PROCESS")
+
+    replacements = {
+        "validate_telemetry_registration": lambda _: {"synthetic": True},
+        "validate_cap_hit_assessment": lambda *_: (None, None),
+        "build_watch_command": lambda *_args, **_kwargs: command,
+        "validate_watch_routing": lambda *_: 0,
+        "prepare_watched_command": lambda *_: (command, os.environ.copy()),
+        "refuse_unproved_executable": lambda *_: None,
+        "capture_dispatch_candidate": lambda *_: ("e" * 64, None),
+        "require_persistent_directory": lambda *_: None,
+        "start_span": span_start,
+        "finish_span": lambda **fields: finished.append(fields),
+        # Ordering is the unit oracle; this sink is not real span measurement.
+        "closed_span": lambda **fields: {"duration_ns": 0},
+        "terminate_group": wait_only,
+        "append_record": lambda row, *_: diagnostics.append(row),
+        "scrubbed_env": lambda *_: os.environ.copy(),
+        "utc_now": timestamp,
+    }
+
+    def topology(*_args, **fields):
+        events.append(("topology", fields["state"]))
+        return None
+
+    replacements["record_dispatch_topology"] = topology
+    for name, value in replacements.items():
+        monkeypatch.setattr(module, name, value)
+    monkeypatch.delenv("KICKOFF_DELEGATION_DEPTH", raising=False)
+    monkeypatch.setattr(module, "time", types.SimpleNamespace(monotonic=clock, sleep=time.sleep))
+    monkeypatch.setattr(module.subprocess, "run", admission)
+    monkeypatch.setattr(module.subprocess, "Popen", spawn)
+    monkeypatch.setattr(module.os, "killpg", no_signal)
+    monkeypatch.setattr(module.os, "kill", no_signal)
+    monkeypatch.setattr(module.signal, "signal", lambda *_: None)
+    monkeypatch.setattr(module.signal, "getsignal", lambda *_: module.signal.SIG_DFL)
+
+    if case in {"admission-refusal", "spawn-refusal"}:
+        with pytest.raises(SystemExit) as stopped:
+            module.watch(args, document)
+        assert stopped.value.code == 2, "Admission/spawn refusal must retain its exit"
+        assert ("topology", "rejected") in events and not diagnostics
+        assert len(finished) == 1 and finished[0]["outcome"] == "error"
+        assert finished[0]["exit_code"] == 127
+        if case == "admission-refusal":
+            assert not any(kind == "spawn" for kind, _ in events)
+            assert not module.advisory.budget_path(tmp_path, "synthetic").exists()
+        else:
+            ledger = module.advisory.budget_path(tmp_path, "synthetic")
+            rows = [json.loads(line) for line in ledger.read_text().splitlines()]
+            assert rows == [claim, {"not_started": claim}], (
+                "SPAWN REFUSAL MUST CANCEL EXACT UNSTARTED CLAIM"
+            )
+            assert not module.advisory.launches(tmp_path, "synthetic")
+    else:
+        code = module.watch(args, document)
+        assert all(child.poll() == 0 for child in owned)
+        assert code == (124 if case == "silent-event" else 0), (
+            "SILENT CHILD MUST RETAIN FIRST EVENT LIMIT"
+            if case == "silent-event"
+            else "ADMISSION MUST NOT SPEND CHILD EXECUTION BUDGET"
+        )
+        row = diagnostics[0]
+        if case == "silent-event":
+            assert row["timeout_kind"] == "first-event"
+            began = next(value for kind, value in events if kind == "execution-boundary")
+            observed = next(value for kind, value in events if kind == "timeout-observed")
+            assert 2 <= observed - began < 4, (
+                "LIVE SILENT CHILD MUST RECEIVE FULL FIRST EVENT WINDOW"
+            )
+            assert all(item["timeout_ns"] == 2_000_000_000 for item in finished), (
+                "SILENT CHILD MUST RETAIN FIRST EVENT LIMIT"
+            )
+        else:
+            assert row["first_event_seconds"] < first_limit
+            assert (tmp_path / "result.txt").read_text() == "ready"
+        # Bind the actual emitted timestamp, allowing unrelated UTC reads.
+        boundary = events.index(("timestamp", row["started_at"]))
+        kinds = [kind for kind, _ in events]
+        assert kinds.index("admission") < boundary < kinds.index("spawn"), (
+            "COMMAND TIMESTAMP MUST FOLLOW ADMISSION AND PRECEDE SPAWN"
+        )
+        invocation = spans[row["span_id"]]
+        assert invocation["category"] == "intelligence", (
+            "INVOCATION SPAN MUST OPEN BEFORE ADMISSION"
+        )
+        assert events.index(("span", "intelligence")) < kinds.index("admission"), (
+            "INVOCATION SPAN MUST OPEN BEFORE ADMISSION"
+        )
+        wait = spans[row["wait_span_id"]]
+        assert wait["parent_span_id"] == row["span_id"] and wait["category"] == "wait"
+
+    assert time.monotonic is real_clock, "CLOCK OFFSET MUST REMAIN MODULE LOCAL"

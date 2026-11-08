@@ -1,0 +1,4 @@
+if (!result.ref) {
+  if (isWorkflowRepository) {
+    result.ref = github.context.ref
+    result.commit = github.context.sha

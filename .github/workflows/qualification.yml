@@ -1,5 +1,29 @@
 name: Qualification
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release_qualification:
+        description: Qualify the unchanged signed 0.3.0 release source
+        type: boolean
+        required: false
+        default: false
+      controller_commit:
+        description: Gate-qualified controller commit on master
+        type: string
+        required: false
+        default: ""
+      workflow_blob:
+        description: Qualified controller workflow blob
+        type: string
+        required: false
+        default: ""
+      request_id:
+        description: Caller-owned 32-character hexadecimal request identity
+        type: string
+        required: false
+        default: ""
 permissions:
   contents: read
 jobs:
@@ -8,12 +32,107 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.release_qualification && '442afd5fcbc726a3683b209102eb0f42125b5aff' || '' }}
+      - name: Verify qualification source and controller identity
+        id: qualification-identity
+        shell: bash
+        env:
+          QUALIFICATION_RELEASE_MODE: ${{ inputs.release_qualification && 'true' || 'false' }}
+          QUALIFICATION_CONTROLLER: ${{ inputs.controller_commit }}
+          QUALIFICATION_WORKFLOW_BLOB: ${{ inputs.workflow_blob }}
+          QUALIFICATION_REQUEST: ${{ inputs.request_id }}
+        run: |
+          set -euo pipefail
+          release_mode="${QUALIFICATION_RELEASE_MODE:-false}"
+          controller="${QUALIFICATION_CONTROLLER:-}"
+          workflow_blob="${QUALIFICATION_WORKFLOW_BLOB:-}"
+          request_id="${QUALIFICATION_REQUEST:-}"
+          refuse() { printf 'QUALIFICATION REFUSED %s\n' "$1" >&2; exit 1; }
+          source_head="$(git rev-parse HEAD)"
+          if [[ "$release_mode" == false ]]; then
+            [[ -z "$controller$workflow_blob$request_id" ]] || refuse ORDINARY_RELEASE_INPUTS
+            [[ "$source_head" == "$GITHUB_SHA" ]] || refuse ORDINARY_SOURCE
+            printf 'QUALIFICATION_IDENTITY mode=ordinary event=%s source=%s\n' "$GITHUB_EVENT_NAME" "$source_head"
+            exit 0
+          fi
+          [[ "$release_mode" == true ]] || refuse RELEASE_MODE
+          [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]] || refuse RELEASE_EVENT
+          [[ "$GITHUB_REPOSITORY" == wolfmcnally/drawbridge ]] || refuse RELEASE_REPOSITORY
+          [[ "$GITHUB_WORKFLOW_REF" == wolfmcnally/drawbridge/.github/workflows/qualification.yml@refs/heads/master ]] || refuse WORKFLOW_REF
+          [[ "$controller" =~ ^[a-f0-9]{40}$ && "$workflow_blob" =~ ^[a-f0-9]{40}$ && "$request_id" =~ ^[a-f0-9]{32}$ ]] || refuse INPUT_FORMAT
+          [[ "$GITHUB_SHA" == "$controller" && "$GITHUB_WORKFLOW_SHA" == "$controller" ]] || refuse CONTROLLER
+          [[ "$source_head" == 442afd5fcbc726a3683b209102eb0f42125b5aff ]] || refuse RELEASE_SOURCE
+          origin="$(git remote get-url origin)"
+          [[ "$origin" == https://github.com/wolfmcnally/drawbridge || "$origin" == https://github.com/wolfmcnally/drawbridge.git ]] || refuse ORIGIN
+          # Fetch controller bytes without creating a controller branch or remote-tracking ref.
+          git fetch --no-tags --depth=1 origin "$controller"
+          actual_blob="$(git rev-parse "${controller}:.github/workflows/qualification.yml")"
+          [[ "$actual_blob" == "$workflow_blob" ]] || refuse WORKFLOW_BLOB
+          git fetch --no-tags --depth=1 origin refs/tags/v0.3.0:refs/tags/v0.3.0
+          tag_object="$(git rev-parse refs/tags/v0.3.0)"
+          tag_source="$(git rev-parse 'refs/tags/v0.3.0^{}')"
+          [[ "$tag_object" == 55693cadf79bdeb0cbb84cabf5c99702f4ec1dd0 ]] || refuse TAG_OBJECT
+          [[ "$tag_source" == 442afd5fcbc726a3683b209102eb0f42125b5aff ]] || refuse TAG_SOURCE
+          [[ "$(git rev-parse HEAD)" == "$source_head" ]] || refuse CHECKOUT_CHANGED
+          printf 'QUALIFICATION_IDENTITY mode=release event=%s controller=%s workflow_blob=%s source=%s tag=v0.3.0 tag_object=%s request=%s\n' "$GITHUB_EVENT_NAME" "$controller" "$actual_blob" "$source_head" "$tag_object" "$request_id"
       - name: Fetch the exact Vellric 0.2.4 release
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL https://github.com/wolfmcnally/vellric/releases/download/v0.2.4/vellric-0.2.4-py3-none-any.whl -o "$RUNNER_TEMP/vellric-0.2.4-py3-none-any.whl"
-          curl -fsSL https://github.com/wolfmcnally/vellric/releases/download/v0.2.4/vellric-0.2.4.tar.gz -o "$RUNNER_TEMP/vellric-0.2.4.tar.gz"
+          printf 'CURL_EXECUTABLE=%s\n' "$(command -v curl)"
+          curl --version
+          fetch_exact_asset() {
+            local url="$1" target="$2" expected_sha="$3" expected_bytes="$4"
+            local started="$SECONDS" attempt remaining request_limit part telemetry curl_exit
+            local http_code remote_ip redirects effective_url effective_host actual_bytes delay transient
+            for attempt in 1 2 3; do
+              remaining=$((180 - (SECONDS - started)))
+              [[ "$remaining" -gt 0 ]] || { printf 'ASSET REFUSED budget-exhausted\n' >&2; return 1; }
+              request_limit=45
+              [[ "$remaining" -ge "$request_limit" ]] || request_limit="$remaining"
+              part="$(mktemp "${target}.attempt-${attempt}.XXXXXX")"
+              if telemetry="$(curl --retry 0 --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time "$request_limit" --max-filesize "$expected_bytes" --output "$part" --write-out '%{http_code}\n%{remote_ip}\n%{num_redirects}\n%{url_effective}' "$url")"; then
+                curl_exit=0
+              else
+                curl_exit=$?
+              fi
+              { read -r http_code || :; read -r remote_ip || :; read -r redirects || :; IFS= read -r effective_url || :; } <<< "$telemetry"
+              # Redirect queries may contain signed tokens. Record only their hostname.
+              effective_host="${effective_url#*://}"
+              effective_host="${effective_host%%/*}"
+              effective_host="${effective_host%%\?*}"
+              effective_host="${effective_host##*@}"
+              actual_bytes="$(wc -c < "$part")"
+              actual_bytes="${actual_bytes//[[:space:]]/}"
+              printf 'ASSET_ATTEMPT asset=%s attempt=%s curl=%s http=%s bytes=%s elapsed=%s host=%s remote_ip=%s redirects=%s\n' "${target##*/}" "$attempt" "$curl_exit" "${http_code:-unknown}" "$actual_bytes" "$((SECONDS - started))" "${effective_host:-unknown}" "${remote_ip:-unknown}" "${redirects:-unknown}"
+              if [[ "$curl_exit" -eq 0 && "$http_code" == 200 ]]; then
+                [[ "$actual_bytes" == "$expected_bytes" ]] || { printf 'ASSET REFUSED size-mismatch\n' >&2; return 1; }
+                if ! printf '%s  %s\n' "$expected_sha" "$part" | sha256sum --check --status; then
+                  printf 'ASSET REFUSED digest-mismatch\n' >&2
+                  return 1
+                fi
+                mv -- "$part" "$target"
+                printf 'ASSET_VERIFIED asset=%s sha256=%s bytes=%s\n' "${target##*/}" "$expected_sha" "$actual_bytes"
+                return 0
+              fi
+              transient=false
+              case "$curl_exit" in
+                7|18|28|56) transient=true ;;
+                22) case "$http_code" in 408|429|500|502|503|504) transient=true ;; esac ;;
+              esac
+              [[ "$transient" == true ]] || { printf 'ASSET REFUSED fatal-or-unclassified\n' >&2; return 1; }
+              [[ "$attempt" -lt 3 ]] || { printf 'ASSET REFUSED attempts-exhausted\n' >&2; return 1; }
+              delay=20
+              [[ "$attempt" -eq 1 ]] || delay=40
+              remaining=$((180 - (SECONDS - started)))
+              [[ "$remaining" -gt "$delay" ]] || { printf 'ASSET REFUSED budget-exhausted\n' >&2; return 1; }
+              sleep "$delay"
+            done
+            return 1
+          }
+          fetch_exact_asset https://github.com/wolfmcnally/vellric/releases/download/v0.2.4/vellric-0.2.4-py3-none-any.whl "$RUNNER_TEMP/vellric-0.2.4-py3-none-any.whl" 0799e067048b5ca34e5e68b088f976e3e2cc08bf84d1c9458d423f9a51d8cfc0 468498
+          fetch_exact_asset https://github.com/wolfmcnally/vellric/releases/download/v0.2.4/vellric-0.2.4.tar.gz "$RUNNER_TEMP/vellric-0.2.4.tar.gz" d10f806079f04e4a984781036f3f36c99a962409d96188af342d3ab1cdaa6f63 2333950
           echo "0799e067048b5ca34e5e68b088f976e3e2cc08bf84d1c9458d423f9a51d8cfc0  $RUNNER_TEMP/vellric-0.2.4-py3-none-any.whl" | sha256sum --check
           echo "d10f806079f04e4a984781036f3f36c99a962409d96188af342d3ab1cdaa6f63  $RUNNER_TEMP/vellric-0.2.4.tar.gz" | sha256sum --check
           mkdir "$RUNNER_TEMP/vellric-source"

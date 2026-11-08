@@ -1,0 +1,1 @@
+If you attempt to dereference a nonexistent property, it will evaluate to an empty string.

@@ -1,0 +1,2 @@
+requestBody["return_run_details"] = true
+WorkflowRunID int64 `json:"workflow_run_id"`

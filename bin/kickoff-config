@@ -2533,11 +2533,9 @@ def watch(arguments: argparse.Namespace, document: MutableMapping[str, Any]) -> 
     stderr_file = open_artifact(arguments.stderr_file)
     result_path = prepare_output_path(arguments.result_file)
     required_output_path = prepare_output_path(arguments.required_output_file)
-    # The last thing that observes the repository candidate before the child
-    # starts. The run-scoped dispatch opening appended immediately afterward is
-    # ignored runtime state and cannot move that candidate. Both happen before
-    # the clocks start, so neither tree hashing nor durable bookkeeping is
-    # charged against the child's first-event budget.
+    # Capture the candidate and dispatch opening before launch admission.
+    # Admission and durable bookkeeping precede the command execution clocks;
+    # the authoritative intelligence span still measures the full invocation.
     dispatch_candidate, candidate_error = capture_dispatch_candidate(arguments)
     if candidate_error:
         telemetry_complete = False
@@ -2584,9 +2582,6 @@ def watch(arguments: argparse.Namespace, document: MutableMapping[str, Any]) -> 
                 file=sys.stderr,
             )
         die(f"could not open dispatch evidence before launch: {opening_error}")
-    started_iso = utc_now()
-    started = time.monotonic()
-    last_activity = started
     first_event_at: float | None = None
     longest_idle = 0.0
     stdout_data = bytearray()
@@ -2612,6 +2607,9 @@ def watch(arguments: argparse.Namespace, document: MutableMapping[str, Any]) -> 
             if launch.returncode:
                 raise OSError(launch.stderr.strip() or "advice launch refused")
             claimed_now = True
+        started_iso = utc_now()
+        started = time.monotonic()
+        last_activity = started
         process = subprocess.Popen(
             command,
             env=child_environment,

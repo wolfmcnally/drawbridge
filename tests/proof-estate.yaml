@@ -858,6 +858,7 @@ families:
   - tests/test_kickoff_config.py
   covers:
   - tests/test_kickoff_config.py
+  - bin/kickoff-config
   contract: Retained receiving boundary at tests/test_kickoff_config.py
   risk_class: baseline-pending-local-review
   oracle: Existing assertion/output boundary retained; local marginal-value and witness
@@ -2020,6 +2021,29 @@ families:
   admission: Bounded first-party synthetic input or in-memory consumer call; no provider,
     network fetch, rendering or benchmark.
   nearest_overlap: Span tampering does not challenge format/unit identity.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_qualification_workflow.py
+  kind: pytest
+  selectors:
+  - tests/test_qualification_workflow.py
+  source_paths:
+  - tests/test_qualification_workflow.py
+  covers:
+  - .github/workflows/qualification.yml
+  contract: Bounded transient fetches preserve exact bytes and specialized CI binds
+    controller, workflow, source, tag and request while ordinary qualification remains
+    usable.
+  risk_class: security, authority, recovery, corruption, core-success
+  oracle: Actual inline Bash; independent fixture bytes and real SHA256; strict recorded
+    external-tool dialogue, expected refusal or identity record and finite invocation
+    count.
+  admission: Demonstrated CI transport failures and explicitly approved two-revision
+    qualification; at most three fake curl calls or eight fake git calls per case,
+    eight-second subprocess deadlines, no network or installs.
+  nearest_overlap: Existing parser, installed conversion and governance tests do not
+    execute the workflow transport/identity boundary.
   tier: changed
   flake_rate: 0.0
   replacement_lineage: []

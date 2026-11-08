@@ -1,0 +1,4 @@
+GITHUB_WORKFLOW_REF
+octocat/hello-world/.github/workflows/my-workflow.yml@refs/heads/my_branch
+GITHUB_REPOSITORY
+octocat/Hello-World

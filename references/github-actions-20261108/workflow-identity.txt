@@ -1,0 +1,2 @@
+`GITHUB_SHA` | The commit SHA that triggered the workflow.
+`GITHUB_WORKFLOW_SHA` | The commit SHA for the workflow file.

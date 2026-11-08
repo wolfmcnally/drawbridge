@@ -1,0 +1,10 @@
+{
+  "from": null,
+  "id": "b42ec828b86142b9a3c78a58b346d2da",
+  "owner": null,
+  "phase": "qualify-workflow-transport",
+  "previous": null,
+  "reason": "New phase; not a claim or acceptance",
+  "state": "not-started",
+  "writer": "drawbridge-maintainer"
+}

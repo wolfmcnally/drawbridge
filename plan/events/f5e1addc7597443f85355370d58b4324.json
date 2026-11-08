@@ -1,0 +1,15 @@
+{
+  "acceptance": {
+    "path": ".kickoff/runs/transport-admission-qh3i74td/closure.json",
+    "sha256": "f00cd75dd8cfe497e15702f53451a8d9be98c1c9ed440acd4f876754559c654a"
+  },
+  "claim": "foldedspace:1a8b0ab6-f0f2-4b19-9e64-c99605720038/native:codex/3dcfd5c0-9b0c-46d1-92bd-50fa42b0d195/01a1b779-8e54-7010-a43d-b7c5fac1e873;bounded-transport-route:f705be7548fdbd0168c249a682edb582e6fb6d44b41797f44917d24cc073aa16",
+  "from": "in-progress",
+  "id": "f5e1addc7597443f85355370d58b4324",
+  "owner": "drawbridge-maintainer",
+  "phase": "qualify-workflow-transport",
+  "previous": "e1293c2a4fd342029c125e1d3afec8bd",
+  "reason": "Fresh current-qualified-tool continuation accepted on all3managed gates,36focused and611full tests; original sealed partial close/END/refused event preserved. Parent remains active for actual controller delivery/CI/publication/readback; bare handoff and signed delivery remain pending.",
+  "state": "completed",
+  "writer": "drawbridge-maintainer"
+}
