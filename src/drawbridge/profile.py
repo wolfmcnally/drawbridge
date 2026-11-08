@@ -21,7 +21,7 @@ ENDPOINT_KINDS = frozenset({"openai-compatible", "anthropic", "ollama", "elevenl
 EGRESS = frozenset({"cloud", "local"})
 _ENDPOINT_KEYS = frozenset({"kind", "base_url", "api_key_env", "egress", "timeout_seconds", "max_concurrency", "command", "cost_per_audio_hour_usd"})
 _LIMIT_KEYS = frozenset({"max_pages_per_document", "max_audio_minutes", "max_audio_minutes_per_run", "cache_dir"})
-_TOP_KEYS = frozenset({"endpoints", "stages", "limits"})
+_TOP_KEYS = frozenset({"endpoints", "stages", "limits", "presentation_notes"})
 
 #: Stage order is pipeline order. ``acts_on`` is the widest set a stage may apply to; ``default`` is
 #: what it applies to when the profile does not say. A profile may narrow ``applies_to``, never widen.
@@ -118,6 +118,7 @@ class Profile:
     endpoints: Mapping[str, Endpoint] = field(default_factory=dict)
     stages: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     limits: Limits = field(default_factory=Limits)
+    presentation_notes: bool = True
 
     def endpoint_for(self, stage: str) -> Endpoint | None:
         name = self.stages.get(stage, {}).get("endpoint")
@@ -127,6 +128,7 @@ class Profile:
         """The resolved profile for display: variable names and whether they are set, never values."""
         return {
             "path": str(self.path) if self.path else None,
+            "presentation_notes": self.presentation_notes,
             "endpoints": {
                 name: {
                     "kind": endpoint.kind,
@@ -271,6 +273,9 @@ def _stage(name: str, raw: Any, endpoints: Mapping[str, Endpoint]) -> Mapping[st
 def parse_profile(raw: Any, path: Path | None = None) -> Profile:
     data = _mapping(raw, "profile")
     _unknown(data, _TOP_KEYS, "profile")
+    notes = data.get("presentation_notes", True)
+    if type(notes) is not bool:
+        raise ProfileError("presentation_notes must be boolean")
     endpoints = {name: _endpoint(name, value) for name, value in _mapping(data.get("endpoints"), "endpoints").items()}
     stages = {name: _stage(name, value, endpoints) for name, value in _mapping(data.get("stages"), "stages").items()}
     limits_raw = _mapping(data.get("limits"), "limits")
@@ -284,7 +289,7 @@ def parse_profile(raw: Any, path: Path | None = None) -> Profile:
         cache_dir=Path(str(limits_raw.get("cache_dir", defaults.cache_dir))),
     )
     ordered = {name: stages[name] for name in STAGE_NAMES if name in stages}
-    return Profile(path=path, endpoints=endpoints, stages=ordered, limits=limits)
+    return Profile(path=path, endpoints=endpoints, stages=ordered, limits=limits, presentation_notes=notes)
 
 
 def load_profile(path: Path) -> Profile:

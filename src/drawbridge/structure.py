@@ -232,6 +232,8 @@ def semantic_mirror(
     and never reaches the model. ``model_pages`` says which of the remaining pages the model may see.
     """
     header, body = parse_mirror_header(fidelity_text)
+    from .mirror import require_v1_semantics
+    require_v1_semantics(header)
     cited = "pdf_page_map" in header
     citation_texts = []
     if cited:
@@ -335,6 +337,8 @@ def run_structure(
     if stage.get("preservation", "strict") != "strict":
         raise ProfileError("structure supports preservation: strict only")
     header, body = parse_mirror_header(fidelity_text)
+    from .mirror import require_v1_semantics
+    require_v1_semantics(header)
     if "pdf_page_map" in header:
         from .citations import split
 

@@ -1413,3 +1413,613 @@ families:
   tier: vital
   flake_rate: 0.0
   replacement_lineage: []
+- id: pytest:tests/test_presentation_worker.py::test_native_presentation_boundary_denies_socket_and_private_file
+  kind: pytest
+  selectors:
+  - tests/test_presentation_worker.py::test_native_presentation_boundary_denies_socket_and_private_file
+  source_paths:
+  - tests/test_presentation_worker.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/configuration.py
+  - src/drawbridge/convert.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/__init__.py
+  contract: Profile permits native socket access, host private file reads on macOS,
+    or scrubbed-secret leakage
+  risk_class: public-contract, security, persisted-schema
+  oracle: Real child C-backed socket and file operations under exact generated production
+    profile/filter
+  admission: One child, timeout ten seconds, loopback only; Worker startup proves
+    socket denial on each conversion but cannot prove file restrictions
+  nearest_overlap: Worker startup proves socket denial on each conversion but cannot
+    prove file restrictions
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_public_slides_preserve_order_notes_assets_and_original
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_public_slides_preserve_order_notes_assets_and_original
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/configuration.py
+  - src/drawbridge/convert.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/__init__.py
+  contract: Lost/reordered hidden or text-free slides, misattached notes, source rewriting
+    or missed repeated assets
+  risk_class: public-contract, security, persisted-schema
+  oracle: Independently authored ids, content, notes and repeated image uses at public
+    convert/render/parse boundary
+  admission: One four-slide authored deck, two conversions, no network; Existing office/PDF
+    proofs have no presentation or v2 oracle
+  nearest_overlap: Existing office/PDF proofs have no presentation or v2 oracle
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_notes_configuration_and_explicit_override
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_notes_configuration_and_explicit_override
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/configuration.py
+  - src/drawbridge/convert.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/__init__.py
+  contract: Configuration exclusion overridden by implicit CLI default, or explicit
+    API selection ignored
+  risk_class: public-contract, security, persisted-schema
+  oracle: Same authored note absent/present under real scoped config and explicit
+    options
+  admission: Two worker conversions and one config parse; Existing configuration proofs
+    do not exercise presentation note data
+  nearest_overlap: Existing configuration proofs do not exercise presentation note
+    data
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_hostile_packages_refuse_without_partial_mirrors
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_hostile_packages_refuse_without_partial_mirrors
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/configuration.py
+  - src/drawbridge/convert.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/__init__.py
+  contract: Hostile or unsupported package silently succeeds or executes external
+    content
+  risk_class: public-contract, security, persisted-schema
+  oracle: Bounded independent ZIP mutations at public conversion boundary; exact typed
+    refusal/deferred family
+  admission: At most ten small child jobs, each capped by production deadline; Other
+    document admission has distinct parsers/contracts
+  nearest_overlap: Other document admission has distinct parsers/contracts
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_renamed_unsupported_families_are_truthfully_deferred
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_renamed_unsupported_families_are_truthfully_deferred
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/configuration.py
+  - src/drawbridge/convert.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/__init__.py
+  contract: Mislabel a macro/template as an ordinary supported deck
+  risk_class: public-contract, security, persisted-schema
+  oracle: Independent package content-type mutation and public typed deferred media/method
+  admission: Two small worker jobs; no network; Ordinary extraction cannot establish
+    unsupported-family handling
+  nearest_overlap: Ordinary extraction cannot establish unsupported-family handling
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_slide_map_rejects_identity_span_and_framing_tampering
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_slide_map_rejects_identity_span_and_framing_tampering
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/configuration.py
+  - src/drawbridge/convert.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/__init__.py
+  contract: Persisted map accepts changed identity/span/framing or source text manufactures
+    sections
+  risk_class: public-contract, security, persisted-schema
+  oracle: Independent corruption of one valid public mirror, rejection by public parser
+  admission: One conversion plus bounded in-memory mutations; PDF map proofs exercise
+    a separate version/schema
+  nearest_overlap: PDF map proofs exercise a separate version/schema
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_cli_verifies_source_slides_and_rejects_changed_source
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_cli_verifies_source_slides_and_rejects_changed_source
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/configuration.py
+  - src/drawbridge/convert.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/__init__.py
+  contract: v2 verify falsely reports zero-page success or accepts a different source
+  risk_class: public-contract, security, persisted-schema
+  oracle: CLI conversion and original versus independently changed deck verification
+  admission: At most three small worker conversions; Existing CLI verification is
+    v1/PDF-only
+  nearest_overlap: Existing CLI verification is v1/PDF-only
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_deadline_refuses_and_reaps_the_real_worker_group
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_deadline_refuses_and_reaps_the_real_worker_group
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/configuration.py
+  - src/drawbridge/convert.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/__init__.py
+  contract: A real timed-out parser fails and its owned process group is gone.
+  risk_class: public-contract, security, persisted-schema
+  oracle: Actual launched pid, typed deadline error and independent process-group
+    absence.
+  admission: One authored deck/child, bounded cleanup; no external operations.
+  nearest_overlap: Native sandbox probes and voluntary malformed-package exit do not
+    prove parent cancellation.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentation_worker.py::test_native_child_terminal_state_keeps_its_failure_class
+  kind: pytest
+  selectors:
+  - tests/test_presentation_worker.py::test_native_child_terminal_state_keeps_its_failure_class
+  source_paths:
+  - tests/test_presentation_worker.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/audio.py
+  - src/drawbridge/refine.py
+  - src/drawbridge/structure.py
+  contract: Startup capability failure, native resource signal and unexplained parser
+    termination remain distinct.
+  risk_class: public-contract, security, persisted-schema
+  oracle: Three real bounded child exit/signal cases through the actual parent protocol
+    assert exact failure classes.
+  admission: Bounded first-party synthetic input or in-memory consumer call; no provider,
+    network fetch, rendering or benchmark.
+  nearest_overlap: Voluntary malformed-package responses and deadlines do not establish
+    native exit classification.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_unrendered_constructs_keep_slide_content_with_limitations
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_unrendered_constructs_keep_slide_content_with_limitations
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/audio.py
+  - src/drawbridge/refine.py
+  - src/drawbridge/structure.py
+  contract: Supported slide content survives unknown shape/SmartArt/ink/chart constructs
+    with explicit limitations.
+  risk_class: public-contract, security, persisted-schema
+  oracle: Independently authored raw constructs, retained source text and exact limitation
+    kinds.
+  admission: Bounded first-party synthetic input or in-memory consumer call; no provider,
+    network fetch, rendering or benchmark.
+  nearest_overlap: Ordinary table and text fixtures do not expose unsupported factory/getter
+    failures.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_notes_ownership_refuses_ambiguous_attachment
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_notes_ownership_refuses_ambiguous_attachment
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/audio.py
+  - src/drawbridge/refine.py
+  - src/drawbridge/structure.py
+  contract: Speaker notes belong uniquely and reciprocally to their canonical source
+    slide.
+  risk_class: public-contract, security, persisted-schema
+  oracle: Two independent notes relationship mutations refuse with the owning public
+    reason.
+  admission: Bounded first-party synthetic input or in-memory consumer call; no provider,
+    network fetch, rendering or benchmark.
+  nearest_overlap: Positive attached-note extraction cannot expose shared or mismatched
+    owners.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_excluded_profiles_and_expansion_refuse_truthfully
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_excluded_profiles_and_expansion_refuse_truthfully
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/audio.py
+  - src/drawbridge/refine.py
+  - src/drawbridge/structure.py
+  contract: Excluded profiles defer truthfully and expanded bytes are bounded independently
+    of declared ZIP sizes.
+  risk_class: public-contract, security, persisted-schema
+  oracle: Strict namespace, macro part, encrypted flags and both declared/forged 65
+    MiB member mutations; public reasons and bounded ZIP-reader control.
+  admission: Bounded first-party synthetic input or in-memory consumer call; no provider,
+    network fetch, rendering or benchmark.
+  nearest_overlap: Small malformed XML and declared sizes alone do not establish unsupported-profile
+    or actual-expansion behavior.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_legacy_and_cli_notes_policy_and_malformed_exit
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_legacy_and_cli_notes_policy_and_malformed_exit
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/audio.py
+  - src/drawbridge/refine.py
+  - src/drawbridge/structure.py
+  contract: Legacy profile, explicit CLI note selection, dry-run visibility and malformed-input
+    status agree.
+  risk_class: public-contract, security, persisted-schema
+  oracle: Actual CLI/profile operations and strict Boolean parsing with expected rendered
+    notes, JSON count, reason and exit.
+  admission: Bounded first-party synthetic input or in-memory consumer call; no provider,
+    network fetch, rendering or benchmark.
+  nearest_overlap: API option selection cannot prove CLI precedence, report visibility
+    or failure exit routing.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_v1_consumers_refuse_slides_before_callbacks
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_v1_consumers_refuse_slides_before_callbacks
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/audio.py
+  - src/drawbridge/refine.py
+  - src/drawbridge/structure.py
+  contract: Existing v1 page, semantic, structure, refinement and transcript consumers
+    refuse v2 before work.
+  risk_class: public-contract, security, persisted-schema
+  oracle: Real public consumer calls with forbidden callbacks and explicit MirrorFormatError.
+  admission: Bounded first-party synthetic input or in-memory consumer call; no provider,
+    network fetch, rendering or benchmark.
+  nearest_overlap: Slide-map parsing alone cannot prove all downstream consumer boundaries.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_navigation_graph_uses_reader_dfs_not_longest_simple_path
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_navigation_graph_uses_reader_dfs_not_longest_simple_path
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/audio.py
+  - src/drawbridge/refine.py
+  - src/drawbridge/structure.py
+  contract: The bounded relationship walk matches the reader traversal rather than
+    rejecting a shallow reader graph.
+  risk_class: public-contract, security, persisted-schema
+  oracle: Seventy slide package with independently reversed main relationship order
+    passes native conversion.
+  admission: Bounded first-party synthetic input or in-memory consumer call; no provider,
+    network fetch, rendering or benchmark.
+  nearest_overlap: Ordinary small decks never distinguish DFS depth from longest simple
+    graph path.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_unused_sibling_layout_asset_is_not_a_slide_occurrence
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_unused_sibling_layout_asset_is_not_a_slide_occurrence
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/audio.py
+  - src/drawbridge/refine.py
+  - src/drawbridge/structure.py
+  contract: Only applicable layout/master assets are attributed to a slide.
+  risk_class: public-contract, security, persisted-schema
+  oracle: An image present solely in an unused sibling layout has an inventory entry
+    and no slide occurrences.
+  admission: Bounded first-party synthetic input or in-memory consumer call; no provider,
+    network fetch, rendering or benchmark.
+  nearest_overlap: Repeated slide-local media does not establish inherited scope.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_case_insensitive_content_types_admit_ordinary_media
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_case_insensitive_content_types_admit_ordinary_media
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/audio.py
+  - src/drawbridge/refine.py
+  - src/drawbridge/structure.py
+  contract: Case-insensitive OPC Default/Override declarations admit ordinary presentation
+    media.
+  risk_class: public-contract, security, persisted-schema
+  oracle: Independently case-modified content-type declarations preserve extraction
+    and image inventory.
+  admission: Bounded first-party synthetic input or in-memory consumer call; no provider,
+    network fetch, rendering or benchmark.
+  nearest_overlap: Lowercase producer output does not challenge case-insensitive declarations.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_verify_rejects_changed_presentation_inventory
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_verify_rejects_changed_presentation_inventory
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/audio.py
+  - src/drawbridge/refine.py
+  - src/drawbridge/structure.py
+  contract: Source verification covers presentation and external inventories as well
+    as slide text.
+  risk_class: public-contract, security, persisted-schema
+  oracle: Header-only show/external tampering refuses despite unchanged body; positive
+    original inventory verifies.
+  admission: Bounded first-party synthetic input or in-memory consumer call; no provider,
+    network fetch, rendering or benchmark.
+  nearest_overlap: Content hash and slide text checks cannot detect forged inventory
+    metadata.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_generic_zip_refinement_preserves_effective_names_and_offsets
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_generic_zip_refinement_preserves_effective_names_and_offsets
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/audio.py
+  - src/drawbridge/refine.py
+  - src/drawbridge/structure.py
+  contract: The bounded shared ZIP scanner preserves effective Unicode names and both
+    supported ZIP64 offset layouts.
+  risk_class: public-contract, security, persisted-schema
+  oracle: Standards-formed Unicode Path records, tiny ZIP64 and simulated legacy end-record
+    location resolve the independent expected media type.
+  admission: Bounded first-party synthetic input or in-memory consumer call; no provider,
+    network fetch, rendering or benchmark.
+  nearest_overlap: Normal Word/Excel/PPTX producer ZIPs do not expose Unicode extra-field
+    or legacy end-record offsets.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_source_alternate_shows_links_and_unextracted_comments_are_accounted
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_source_alternate_shows_links_and_unextracted_comments_are_accounted
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/audio.py
+  - src/drawbridge/refine.py
+  - src/drawbridge/structure.py
+  contract: Alternate shows, external links and omitted comments remain truthfully
+    inventoried.
+  risk_class: public-contract, security, persisted-schema
+  oracle: Independently authored package declarations produce the expected show order,
+    hash/scheme and explicit comment limitation.
+  admission: Bounded first-party synthetic input or in-memory consumer call; no provider,
+    network fetch, rendering or benchmark.
+  nearest_overlap: Ordinary text-only decks do not prove retained presentation features
+    or omitted-content disclosure.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentations.py::test_format_units_do_not_alias_old_page_contracts
+  kind: pytest
+  selectors:
+  - tests/test_presentations.py::test_format_units_do_not_alias_old_page_contracts
+  source_paths:
+  - tests/test_presentations.py
+  covers:
+  - src/drawbridge/presentations.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/slide_mirror.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/mirror.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/audio.py
+  - src/drawbridge/refine.py
+  - src/drawbridge/structure.py
+  contract: v1 pages and v2 slides cannot alias each other through format metadata.
+  risk_class: public-contract, security, persisted-schema
+  oracle: Both cross-format header substitutions refuse at the public mirror parser.
+  admission: Bounded first-party synthetic input or in-memory consumer call; no provider,
+    network fetch, rendering or benchmark.
+  nearest_overlap: Span tampering does not challenge format/unit identity.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []

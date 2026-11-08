@@ -1,0 +1,10 @@
+{
+  "from": "not-started",
+  "id": "40de8f22f54a41b69f3b68af57ff7e29",
+  "owner": "drawbridge-maintainer",
+  "phase": "pptx-release-qualification",
+  "previous": "f1709ab37c45452b90fb74d83a879fcf",
+  "reason": "Already-authorized release follows accepted PPTX source; this queue selection does not claim execution or replace source handoff/delivery gates.",
+  "state": "next",
+  "writer": "drawbridge-maintainer"
+}

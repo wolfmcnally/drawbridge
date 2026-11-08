@@ -28,6 +28,8 @@ from .office import OFFICE_TEXT_MEDIA_TYPES, office_text
 from .ocr import CliOcrBackend, OcrBackend, OcrCapacity, OcrResult, ocr_jobs_for
 from .orientation import RecoveredPage, recover_page
 from .progress import ProgressListener, advance, report_progress
+from .presentations import PresentationError, PresentationLimitError, PresentationUnavailable, presentation_mirror
+from .slide_mirror import SLIDE_FORMAT, slide_sections
 from .profile import EMPTY_PROFILE, EgressRefused, Plan, Profile, ProfileError, build_plan, load_profile, parse_profile, resolve_profile
 from .pdf_tools import (
     PDF_LOCK,
@@ -42,6 +44,6 @@ from .pdf_tools import (
     page_texts,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.3.0.dev0"
 
 __all__ = [name for name in dir() if not name.startswith("_")]

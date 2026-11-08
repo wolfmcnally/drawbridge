@@ -354,12 +354,24 @@ _BY_TYPE: dict[str, Callable[[Path, ConversionOptions, str], FileConversion]] = 
 
 
 def supported(media_type: str) -> bool:
+    from .slide_mirror import PPTX_MEDIA_TYPE
     return (
         media_type == PDF_MEDIA_TYPE
+        or media_type == PPTX_MEDIA_TYPE
         or media_type in _BY_TYPE
         or media_type in TEXT_LIKE
         or media_type.startswith(("text/", "image/", "audio/", "video/"))
     )
+
+
+def _presentation_notes(options: ConversionOptions, profile: Profile) -> tuple[bool, str]:
+    if options.include_notes is not None:
+        from .presentations import PresentationError
+
+        if type(options.include_notes) is not bool:
+            raise PresentationError("presentation notes selection must be boolean")
+        return options.include_notes, "option"
+    return profile.presentation_notes, "default" if profile is EMPTY_PROFILE else "profile"
 
 
 def convert_file(
@@ -398,6 +410,19 @@ def convert_file(
                           local_only=configuration.local_only, no_ai=configuration.no_ai)
     if flags:
         options = options.with_verify(flags)
+    from .presentations import presentation_family
+    if presentation_family(media_type):
+        if media_type == "application/vnd.ms-powerpoint":
+            return deferred(path, options, media_type, "unsupported-media-type")
+        from .presentations import UnsupportedPresentation, presentation_mirror
+        active = profile if profile is not None else configuration.profile
+        effective, _ = _presentation_notes(options, active)
+        try:
+            mirror = presentation_mirror(path, options, include_notes=effective)
+        except UnsupportedPresentation as exc:
+            return deferred(path, options, exc.media_type, exc.reason)
+        return FileConversion(mirror, mirror.header["media_type"], "pptx-native-extract",
+                              tuple(mirror.header["verify"]), extras={"slide_count": mirror.header["slide_count"]}, plan=plan)
     if media_type == PDF_MEDIA_TYPE:
         result = convert_pdf(path, ocr=ocr, options=options)
         profile = profile or EMPTY_PROFILE
@@ -474,7 +499,8 @@ def extract_text(path: Path | str, media_type: str | None = None) -> str:
 
 
 def plan_report(
-    path: Path | str, profile: Profile, plan: Plan, media_type: str | None = None
+    path: Path | str, profile: Profile, plan: Plan, media_type: str | None = None,
+    *, options: ConversionOptions | None = None,
 ) -> dict[str, Any]:
     """What converting this file would run, send and cost. Measures a recording locally; sends nothing."""
     path = Path(path)
@@ -485,6 +511,11 @@ def plan_report(
         "profile": str(profile.path) if profile.path else None,
         **plan.as_dict(),
     }
+    from .presentations import presentation_family
+
+    if presentation_family(media_type):
+        include, source = _presentation_notes(options or ConversionOptions(), profile)
+        report["presentation_notes"] = {"include": include, "source": source}
     if media_type.startswith(("audio/", "video/")) and plan.runs("transcription"):
         from .audio import audio_estimate, audio_minutes, decide
 

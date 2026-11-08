@@ -1,0 +1,52 @@
+    @lazyproperty
+    def _parts(self) -> dict[PackURI, Part]:
+        """dict {partname: Part} populated with parts loading from package.
+
+        Among other duties, this collection is passed to each relationships collection so each
+        relationship can resolve a reference to its target part when required. This reference can
+        only be reliably carried out once the all parts have been loaded.
+        """
+        content_types = self._content_types
+        package = self._package
+        package_reader = self._package_reader
+
+        return {
+            partname: PartFactory(
+                partname,
+                content_types[partname],
+                package,
+                blob=package_reader[partname],
+            )
+            for partname in (p for p in self._xml_rels if p != "/")
+            # -- invalid partnames can arise in some packages; ignore those rather than raise an
+            # -- exception.
+            if partname in package_reader
+        }
+
+    @lazyproperty
+    def _xml_rels(self) -> dict[PackURI, CT_Relationships]:
+        """dict {partname: xml_rels} for package and all package parts.
+
+        This is used as the basis for other loading operations such as loading parts and
+        populating their relationships.
+        """
+        xml_rels: dict[PackURI, CT_Relationships] = {}
+        visited_partnames: Set[PackURI] = set()
+
+        def load_rels(source_partname: PackURI, rels: CT_Relationships):
+            """Populate `xml_rels` dict by traversing relationships depth-first."""
+            xml_rels[source_partname] = rels
+            visited_partnames.add(source_partname)
+            base_uri = source_partname.baseURI
+
+            # --- recursion stops when there are no unvisited partnames in rels ---
+            for rel in rels.relationship_lst:
+                if rel.targetMode == RTM.EXTERNAL:
+                    continue
+                target_partname = PackURI.from_rel_ref(base_uri, rel.target_ref)
+                if target_partname in visited_partnames:
+                    continue
+                load_rels(target_partname, self._xml_rels_for(target_partname))
+
+        load_rels(PACKAGE_URI, self._xml_rels_for(PACKAGE_URI))
+        return xml_rels

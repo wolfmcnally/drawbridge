@@ -1,0 +1,15 @@
+{
+  "acceptance": {
+    "path": ".kickoff/runs/pptx-continuation-s4i7yodt/closure.json",
+    "sha256": "1842829faf54170c80c9b4be82b34724382c3e2726367fca2114b29de235f2bd"
+  },
+  "claim": "foldedspace:1a8b0ab6-f0f2-4b19-9e64-c99605720038/native:codex/3dcfd5c0-9b0c-46d1-92bd-50fa42b0d195/01a1b779-8e54-7010-a43d-b7c5fac1e873;sole-owner-directive:c3857f75358a792defb6ab9e73d94e8dddf0a630f09543b7e73f72eda924a908;decisions:d821c78152686cf0f203e5c7204b73ec0add0d0289571d7fdc939446c9fb4fad",
+  "from": "in-progress",
+  "id": "3e40e2deede6448b9b38f552bad471a0",
+  "owner": "drawbridge-maintainer",
+  "phase": "powerpoint-slide-ingestion",
+  "previous": "861fc9756c644356a277354d316c3300",
+  "reason": "Fresh same-phase acceptance after preserved close failures; all six current-candidate mechanical gates passed, original independent advice carried and primary delta assessed. Human demo remains open; bare handoff and delivery remain required.",
+  "state": "completed",
+  "writer": "drawbridge-maintainer"
+}

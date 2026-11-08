@@ -119,6 +119,12 @@ def sniff_media_type(path: Path) -> tuple[str, list[str]]:
     # 1024 bytes, which is exactly what libmagic also allows.
     if b"%PDF-" in head:
         return PDF_MEDIA_TYPE, flags
+    if head.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")):
+        from .slide_mirror import PPTX_MEDIA_TYPE
+
+        refined = _ooxml_media_type(path)
+        if refined == PPTX_MEDIA_TYPE:
+            return refined, flags
     flags.append("media-type-unknown")
     return "application/octet-stream", flags
 
@@ -244,12 +250,74 @@ _MAIL_HEADERS = frozenset(
 
 
 def _ooxml_media_type(path: Path) -> str | None:
+    import struct
     import zipfile
+    import zlib
 
+    # Classification must not materialize an attacker-sized ZipInfo inventory in
+    # the parent process. Read central records individually, without expanding
+    # content. The stdlib's bounded EOCD reader handles ZIP64 and prepended bytes.
+    wanted = {"[Content_Types].xml", *(part for part, _ in _OOXML_PARTS)}
+    names = set()
     try:
-        with zipfile.ZipFile(path) as archive:
-            names = frozenset(archive.namelist())
-    except (OSError, zipfile.BadZipFile):
+        with path.open("rb") as handle:
+            end = zipfile._EndRecData(handle)
+            if not end:
+                return None
+            size = end[zipfile._ECD_SIZE]
+            directory_end = end[zipfile._ECD_LOCATION]
+            handle.seek(directory_end)
+            marker = handle.read(4)
+            # Older supported stdlib patches leave LOCATION at the ordinary
+            # EOCD, while current patches point at ZIP64 EOCD. Inspect the wire
+            # signature instead of assuming either private helper convention.
+            if end[zipfile._ECD_SIGNATURE] == zipfile.stringEndArchive64 and marker == zipfile.stringEndArchive:
+                directory_end -= zipfile.sizeEndCentDir64 + zipfile.sizeEndCentDir64Locator
+            start = directory_end - size
+            if start < 0:
+                return None
+            handle.seek(start)
+            remaining = size
+            while remaining:
+                header = handle.read(zipfile.sizeCentralDir)
+                if len(header) != zipfile.sizeCentralDir:
+                    return None
+                row = struct.unpack(zipfile.structCentralDir, header)
+                if row[zipfile._CD_SIGNATURE] != zipfile.stringCentralDir:
+                    return None
+                length = row[zipfile._CD_FILENAME_LENGTH]
+                extra = row[zipfile._CD_EXTRA_FIELD_LENGTH]
+                comment = row[zipfile._CD_COMMENT_LENGTH]
+                consumed = zipfile.sizeCentralDir + length + extra + comment
+                if consumed > remaining:
+                    return None
+                raw_name = handle.read(length)
+                encoding = "utf-8" if row[zipfile._CD_FLAG_BITS] & 0x800 else "cp437"
+                name = raw_name.decode(encoding)
+                fields = handle.read(extra)
+                if len(fields) != extra:
+                    return None
+                cursor = 0
+                while len(fields) - cursor >= 4:
+                    kind, length = struct.unpack_from("<HH", fields, cursor)
+                    end_field = cursor + 4 + length
+                    if end_field > len(fields):
+                        return None
+                    value = fields[cursor + 4:end_field]
+                    # PKWARE APPNOTE 6.3.10 section 4.6.9: version + raw-name
+                    # CRC32 + UTF-8 name. Avoid the private ZipInfo decoder.
+                    if kind == 0x7075:
+                        if len(value) < 5:
+                            return None
+                        if value[0] == 1 and struct.unpack_from("<I", value, 1)[0] == zlib.crc32(raw_name):
+                            name = value[5:].decode("utf-8") or name
+                    cursor = end_field
+                name = zipfile.ZipInfo(name).filename
+                if name in wanted:
+                    names.add(name)
+                handle.seek(comment, 1)
+                remaining -= consumed
+    except (OSError, OverflowError, ValueError, zipfile.BadZipFile, struct.error):
         return None
     if "[Content_Types].xml" not in names:
         return None

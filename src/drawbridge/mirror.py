@@ -14,6 +14,7 @@ from typing import Any, Iterable, Sequence
 import yaml
 
 from .errors import MirrorFormatError
+from .slide_mirror import SLIDE_FORMAT
 
 GENERATED_BY = "drawbridge"
 MIRROR_FORMAT = "drawbridge.mirror.v1"
@@ -79,12 +80,13 @@ def build_header(
     agent: str = GENERATED_BY,
     verify: Iterable[str] = (),
     unit: str = "page",
+    mirror_format: str = MIRROR_FORMAT,
     extra: dict[str, Any] | None = None,
     extensions: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The provenance header. ``extra`` holds drawbridge's own per-converter fields; ``extensions``
     is the area for anyone else: one mapping per namespace, preserved and never interpreted here."""
-    if unit not in UNITS:
+    if not ((mirror_format == MIRROR_FORMAT and unit in UNITS) or (mirror_format == SLIDE_FORMAT and unit == "slide")):
         raise ValueError(f"unknown mirror unit: {unit}")
     pdf_path = Path(pdf_path)
     header: dict[str, Any] = {
@@ -100,7 +102,7 @@ def build_header(
         ],
         "verify": sorted(set(verify)),
         "generated_by": GENERATED_BY,
-        "format": MIRROR_FORMAT,
+        "format": mirror_format,
         "unit": unit,
     }
     if extra:
@@ -125,6 +127,9 @@ def page_body(title: str, pages: Sequence[str]) -> str:
 
 
 def render_mirror(mirror: Mirror) -> str:
+    from .slide_mirror import split_slides
+    if mirror.header.get("format") == SLIDE_FORMAT:
+        split_slides(mirror.header, mirror.body)
     if "page_citations" in mirror.header or "pdf_page_map" in mirror.header:
         from .citations import split
 
@@ -162,13 +167,16 @@ def parse_mirror_header(value: str | Path) -> tuple[dict[str, Any], str]:
         raise MirrorFormatError(f"mirror header missing: {', '.join(sorted(missing))}")
     # A mirror written before the format was versioned carries neither field; it is a page mirror.
     declared = header.get("format", MIRROR_FORMAT)
-    if declared != MIRROR_FORMAT:
+    from .slide_mirror import split_slides
+    if declared not in {MIRROR_FORMAT, SLIDE_FORMAT}:
         raise MirrorFormatError(f"unsupported mirror format: {declared}")
-    if header.get("unit", "page") not in UNITS:
+    if declared == MIRROR_FORMAT and header.get("unit", "page") not in UNITS:
         raise MirrorFormatError(f"unknown mirror unit: {header['unit']}")
     if not isinstance(header.get("extensions", {}), dict):
         raise MirrorFormatError("mirror extensions must be a mapping")
     body = match.group(2).lstrip("\n")
+    if declared == SLIDE_FORMAT:
+        split_slides(header, body)
     if "page_citations" in header or "pdf_page_map" in header:
         from .citations import split
 
@@ -186,6 +194,8 @@ def page_sections(body: str, *, header: dict | None = None) -> list[str]:
 
     Body-only use is a legacy convenience, not an identity/security validator.
     """
+    if header is not None:
+        require_v1_semantics(header)
     if header is not None and ("page_citations" in header or "pdf_page_map" in header):
         from .citations import split
 
@@ -205,7 +215,16 @@ def sections(body: str, *, header: dict | None = None) -> list[tuple[str, str]]:
 
     Body-only use remains a legacy Markdown convenience, not a security parser.
     """
+    if header is not None and header.get("format") == SLIDE_FORMAT:
+        from .slide_mirror import slide_sections
+        return [(f"Slide {number}", text) for number, text in enumerate(slide_sections(body, header=header), 1)]
     if header is not None and ("page_citations" in header or "pdf_page_map" in header):
         return [(f"Page {number}", text) for number, text in enumerate(page_sections(body, header=header), 1)]
     parts = re.split(r"^## (.+)\n", body, flags=re.M)
     return [(parts[i].strip(), parts[i + 1].strip("\n")) for i in range(1, len(parts), 2)]
+
+
+def require_v1_semantics(header: dict) -> None:
+    """Existing semantic/transcript operations do not interpret slide maps."""
+    if header.get("format") == SLIDE_FORMAT:
+        raise MirrorFormatError("slide mirrors are not supported by this v1 operation")

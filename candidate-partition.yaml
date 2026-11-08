@@ -35,6 +35,7 @@ active:
   - "/tests/**"
   - "/uv.lock"
 bookkeeping:
+  - "/EXECUTION_LOG.jsonl"
   - "/plan/events/**"
   - "/log/entries/**"
   - "/lessons/**"

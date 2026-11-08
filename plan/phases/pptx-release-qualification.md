@@ -20,6 +20,10 @@ Publish a truthful qualified Drawbridge release to its established GitHub Releas
 
 Separate release seam. Elaborate this sketch from the actual accepted product candidate; do not choose the version or claim cross-platform qualification in advance.
 
+## Inherited source qualification
+
+The accepted ingestion source identifies itself as 0.3.0.dev0 and emits drawbridge.mirror.v2 only for slides, preserving v1 behavior. Native ordinary transitional PPTX ingestion, associated notes selection and complete slide/asset accounting were qualified on macOS arm64 and Linux aarch64 with Python 3.12.12. Rendering, binary/macro/template/Strict ingestion, Windows and Linux x86 runtime qualification were not claimed. Release qualification must preserve these boundaries, qualify the actual release version and artifacts, and keep the ingestion User Demo open until the operator performs it. The established branch and destination are origin/master and GitHub Releases; no package-index release is implied.
+
 ## Deliverables
 
 - Freeze a version consistent with actual mirror/API changes and update current installation/usage/release claims.

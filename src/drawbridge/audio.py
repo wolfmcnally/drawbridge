@@ -336,8 +336,10 @@ def convert_audio(
 
 def rerender(mirror_path: Path, package_dir: Path) -> str:
     """Render the body again from the package, after names changed. The header is kept except for a dated note."""
-    dependency = _load_dependency()
     header, body = parse_mirror_header(Path(mirror_path))
+    from .mirror import require_v1_semantics
+    require_v1_semantics(header)
+    dependency = _load_dependency()
     package = dependency.Package.load(Path(package_dir))
     if header["content_hash"] != f"sha256:{package.source_sha256}":
         raise ConversionOperationalError("that package belongs to a different recording than this mirror")

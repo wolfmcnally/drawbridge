@@ -185,6 +185,8 @@ REVIEW_WORKERS = 8  # concurrent window reviews for one transcript
 
 def refined_mirror(fidelity_text: str, review: Reviewer, *, method: str, endpoint: Endpoint | None, speaker_resolution: bool = True, agent: str = "drawbridge") -> Mirror:
     header, body = parse_mirror_header(fidelity_text)
+    from .mirror import require_v1_semantics
+    require_v1_semantics(header)
     parts = _HEADING.split(body)
     at: dict[int, Turn] = {}  # by position in the body; the model sees turns numbered 1, 2, 3
     for index in range(1, len(parts), 2):

@@ -41,6 +41,7 @@ from .pdf_tools import (
     ocr_page_numbers,
 )
 from .profile import EgressRefused, ProfileError, build_plan, resolve_profile
+from .slide_mirror import SLIDE_FORMAT
 
 EXIT_OK, EXIT_USAGE, EXIT_BLOCKED, EXIT_FAILED, EXIT_OPERATIONAL, EXIT_VERIFY = 0, 2, 3, 4, 5, 6
 
@@ -61,9 +62,13 @@ def _atomic_write_text(path: Path, text: str) -> None:
 
 
 def _exit_code_for(exc: DrawbridgeError) -> int:
+    from .presentations import PresentationError, PresentationLimitError, PresentationUnavailable
+
     if blocked_reason(exc) is not None:
         return EXIT_BLOCKED
     if isinstance(exc, (MalformedPdfError, PdfReadOperationalError, PdfOpenOperationalError, MediaTypeError)):
+        return EXIT_FAILED
+    if isinstance(exc, PresentationError) and not isinstance(exc, (PresentationLimitError, PresentationUnavailable)):
         return EXIT_FAILED
     return EXIT_OPERATIONAL
 
@@ -97,6 +102,7 @@ def _build_parser() -> argparse.ArgumentParser:
     convert.add_argument("--stages", help="comma-separated stages to run; others in the profile are skipped")
     convert.add_argument("--skip", help="comma-separated stages to skip")
     convert.add_argument("--no-ai", action="store_true", help="run no stage that uses an endpoint")
+    convert.add_argument("--notes", choices=("include", "exclude"), help="PowerPoint presenter notes policy (overrides profile presentation_notes)")
     convert.add_argument("--local-only", action="store_true", help="refuse any stage whose endpoint declares egress: cloud")
     convert.add_argument("--dry-run", action="store_true", help="print the resolved plan and exit: no calls, no writes")
     convert.add_argument("--artifacts-dir", type=Path, help="where a transcription package is kept (default: beside the input)")
@@ -118,7 +124,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     verify = sub.add_parser("verify", help="check that a mirror matches its PDF")
     verify.add_argument("mirror", type=Path)
-    verify.add_argument("--pdf", type=Path, required=True)
+    verify.add_argument("--pdf", "--source", dest="pdf", type=Path, required=True)
     return parser
 
 
@@ -150,6 +156,14 @@ def _cmd_convert_scoped(args: argparse.Namespace, configuration: Configuration) 
             dpi=args.dpi,
             language=args.lang, tessdata_dir=args.tessdata_dir,
         )
+    options = ConversionOptions(
+        title=args.title,
+        mirror_of=args.mirror_of,
+        acquired_at=args.acquired_at,
+        acquired_from=args.acquired_from,
+        raster_threshold=args.raster_threshold,
+        include_notes=None if args.notes is None else args.notes == "include",
+    )
     try:
         active = configuration.profile if configuration.files else resolve_profile(args.profile, no_profile=args.no_profile)
         media_type, _ = sniff_media_type(args.pdf)
@@ -162,18 +176,11 @@ def _cmd_convert_scoped(args: argparse.Namespace, configuration: Configuration) 
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_USAGE
     if args.dry_run:
-        report = plan_report(args.pdf, active, plan, media_type)
+        report = plan_report(args.pdf, active, plan, media_type, options=options)
         if configuration.files:
             report["configuration"] = configuration.report()
         print(json.dumps(report, indent=2))  # a recording is measured locally; nothing is sent
         return EXIT_OK
-    options = ConversionOptions(
-        title=args.title,
-        mirror_of=args.mirror_of,
-        acquired_at=args.acquired_at,
-        acquired_from=args.acquired_from,
-        raster_threshold=args.raster_threshold,
-    )
     try:
         result = convert_file(args.pdf, ocr=ocr, options=options, media_type=media_type, profile=active, plan=plan, artifacts_dir=args.artifacts_dir)
     except ProfileError as exc:
@@ -183,6 +190,9 @@ def _cmd_convert_scoped(args: argparse.Namespace, configuration: Configuration) 
         code = _exit_code_for(exc)
         label = {EXIT_BLOCKED: "blocked", EXIT_FAILED: "failed", EXIT_OPERATIONAL: "operational"}[code]
         reason = blocked_reason(exc)
+        from .presentations import PresentationError
+        if isinstance(exc, PresentationError):
+            reason = exc.code
         if args.json:
             print(json.dumps({"outcome": label, "reason": reason, "error": type(exc).__name__, "message": str(exc)}))
         else:
@@ -219,6 +229,8 @@ def _cmd_convert_scoped(args: argparse.Namespace, configuration: Configuration) 
             rotations={page.page: page.rotation for page in result.pdf.recovered},
             searchable_pdf=str(result.pdf.searchable_pdf) if result.pdf.searchable_pdf else None,
         )
+    if result.mirror.header.get("unit") == "slide":
+        summary["slide_count"] = result.mirror.header["slide_count"]
     if args.json:
         print(json.dumps(summary))
     elif not args.stdout:
@@ -300,6 +312,23 @@ def _cmd_verify(args: argparse.Namespace) -> int:
     except (OSError, MirrorFormatError) as exc:
         print(f"verify: {exc}", file=sys.stderr)
         return EXIT_VERIFY
+    if header.get("format") == SLIDE_FORMAT:
+        from .presentations import presentation_mirror
+        try:
+            if header["content_hash"] != sha256_file(args.pdf) or header["byte_size"] != args.pdf.stat().st_size:
+                raise MirrorFormatError("presentation source identity differs")
+            rebuilt = presentation_mirror(args.pdf, ConversionOptions(title=body.split("\n", 1)[0].removeprefix("# ")),
+                                          include_notes=header["presentation"]["notes_policy"] == "include")
+            if body.rstrip("\n") != rebuilt.body or any(
+                header[key] != rebuilt.header[key]
+                for key in ("slide_count", "slide_map", "presentation", "presentation_assets", "presentation_external")
+            ):
+                raise MirrorFormatError("presentation mirror differs from original admitted slides/notes/assets")
+        except (DrawbridgeError, OSError, KeyError, ValueError) as exc:
+            print(f"verify: {exc}", file=sys.stderr)
+            return EXIT_VERIFY
+        print(f"ok: {args.mirror} matches {args.pdf} ({header['slide_count']} slides)")
+        return EXIT_OK
     if not args.pdf.is_file():
         print(f"verify: PDF not found: {args.pdf}", file=sys.stderr)
         return EXIT_VERIFY

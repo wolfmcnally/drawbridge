@@ -28,6 +28,7 @@ class ConversionOptions:
     raster_threshold: float = 0.5
     verify: tuple[str, ...] = ()
     extensions: dict[str, Any] | None = None
+    include_notes: bool | None = None
 
     def with_verify(self, flags: Iterable[str]) -> "ConversionOptions":
         return replace(self, verify=(*self.verify, *flags))

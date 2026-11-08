@@ -1,0 +1,11 @@
+{
+  "claim": "foldedspace:1a8b0ab6-f0f2-4b19-9e64-c99605720038/native:codex/3dcfd5c0-9b0c-46d1-92bd-50fa42b0d195/01a1b779-8e54-7010-a43d-b7c5fac1e873;sole-owner-directive:c3857f75358a792defb6ab9e73d94e8dddf0a630f09543b7e73f72eda924a908;decisions:d821c78152686cf0f203e5c7204b73ec0add0d0289571d7fdc939446c9fb4fad",
+  "from": "not-started",
+  "id": "861fc9756c644356a277354d316c3300",
+  "owner": "drawbridge-maintainer",
+  "phase": "powerpoint-slide-ingestion",
+  "previous": "9b1cf400893641eb8d669dbcc24590d2",
+  "reason": "Authorized PPTX phase after qualified Starter adoption; exact operator decisions recorded; sole receiving writer and no active native/role command",
+  "state": "in-progress",
+  "writer": "drawbridge-maintainer"
+}

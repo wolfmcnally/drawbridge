@@ -1,0 +1,163 @@
+==============
+lxml changelog
+==============
+
+6.1.3 (2026-09-02)
+==================
+
+Bugs fixed
+----------
+
+* LP#2165901: External parameter entity parsing was allowed by default
+  (with ``resolve_entities="internal"``).
+  Issue found by Tomer Fichman.
+
+
+6.1.2 (2026-08-18)
+==================
+
+Bugs fixed
+----------
+
+* GH#526: Some build files were missing in the sdist.
+  Patch by Nicola Soranzo.
+
+* Some minor corrections for error handling cases.
+
+Other changes
+-------------
+
+* Built with Cython 3.2.9.
+
+
+6.1.1 (2026-05-18)
+==================
+
+Bugs fixed
+----------
+
+* The known link attributes in ``lxml.html.defs.link_attrs`` were missing ``xlink:href``,
+  which can be used for URL bypass attacks in embedded SVG/MathML/etc. content.
+  https://github.com/fedora-python/lxml_html_clean/security/advisories/GHSA-4jhm-jv67-739f
+
+* The Linux wheels use a patched libxslt 1.1.43, fixing CVE-2025-7424 and CVE-2025-11731.
+
+* The Windows wheels use libxslt 1.1.45, fixing CVE-2025-7424 and CVE-2025-11731.
+
+
+6.1.0 (2026-04-17)
+==================
+
+This release fixes a possible external entity injection (XXE) vulnerability in
+``iterparse()`` and the ``ETCompatXMLParser``.
+
+Features added
+--------------
+
+* GH#486: The HTML ARIA accessibility attributes were added to the set of safe attributes
+  in ``lxml.html.defs``.  This allows ``lxml_html_clean`` to pass them through.
+  Patch by oomsveta.
+
+* The default chunk size for reading from file-likes in ``iterparse()`` is now configurable
+  with a new ``chunk_size`` argument.
+
+Bugs fixed
+----------
+
+* LP#2146291: The ``resolve_entities`` option was still set to ``True`` for
+  ``iterparse`` and ``ETCompatXMLParser``, allowing for external entity injection (XXE)
+  when using these parsers without setting this option explicitly.
+  The default was now changed to ``'internal'`` only (as for the normal XML and HTML parsers
+  since lxml 5.0).
+  Issue found by Sihao Qiu as CVE-2026-41066.
+
+
+6.0.4 (2026-04-12)
+==================
+
+Bugs fixed
+----------
+
+* LP#2148019: Spurious MemoryError during namespace cleanup.
+
+
+6.0.3 (2026-04-09)
+==================
+
+Bugs fixed
+----------
+
+* Several out of memory error cases now raise ``MemoryError`` that were not handled before.
+
+* Slicing with large step values (outside of ``+/- sys.maxsize``) could trigger undefined C behaviour.
+
+* LP#2125399: Some failing tests were fixed or disabled in PyPy.
+
+* LP#2138421: Memory leak in error cases when setting the ``public_id`` or ``system_url`` of a document.
+
+* Memory leak in case of a memory allocation failure when copying document subtrees.
+
+* When mapping an XPath result to Python failed, the result memory could leak.
+
+* When preparing an XSLT transform failed, the XSLT parameter memory could leak.
+
+Other changes
+-------------
+
+* Built using Cython 3.2.4.
+
+* Binary wheels use zlib 1.3.2.
+
+
+6.0.2 (2025-09-21)
+==================
+
+Bugs fixed
+----------
+
+* LP#2125278: Compilation with libxml2 2.15.0 failed.
+  Original patch by Xi Ruoyao.
+
+* Setting ``decompress=True`` in the parser had no effect in libxml2 2.15.
+
+* Binary wheels on Linux and macOS use the library version libxml2 2.14.6.
+  See https://gitlab.gnome.org/GNOME/libxml2/-/releases/v2.14.6
+
+* Test failures in libxml2 2.15.0 were fixed.
+
+Other changes
+-------------
+
+* Binary wheels for Py3.9-3.11 on the ``riscv64`` architecture were added.
+
+* Error constants were updated to match libxml2 2.15.0.
+
+* Built using Cython 3.1.4.
+
+
+6.0.1 (2025-08-22)
+==================
+
+Bugs fixed
+----------
+
+* LP#2116333: ``lxml.sax._getNsTag()`` could fail with an exception on malformed input.
+
+* GH#467: Some test adaptations were made for libxml2 2.15.
+  Patch by Nick Wellnhofer.
+
+* LP2119510, GH#473: A Python compatibility test was fixed for Python 3.14+.
+  Patch by Lumír Balhar.
+
+* GH#471: Wheels for "riscv64" on recent Python versions were added.
+  Patch by ffgan.
+
+* GH#469: The wheel build no longer requires the ``wheel`` package unconditionally.
+  Patch by Miro Hrončok.
+
+* Binary wheels use the library version libxml2 2.14.5.
+  See https://gitlab.gnome.org/GNOME/libxml2/-/releases/v2.14.5
+
+* Windows binary wheels continue to use a security patched library version libxml2 2.11.9.
+
+
