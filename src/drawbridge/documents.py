@@ -31,7 +31,7 @@ from .profile import EMPTY_PROFILE, Plan, Profile, build_plan
 
 NO_TEXT_MARKER = "[No text detected.]"
 TEXT_LIKE = frozenset(
-    {"application/json", "application/yaml", "application/x-yaml", "application/xml"}
+    {"application/csv", "application/json", "application/yaml", "application/x-yaml", "application/xml"}
 )
 MAIL_HEADERS = ("Date", "From", "To", "Cc", "Subject")
 

@@ -206,6 +206,32 @@ def test_text_keeps_words_and_flags_lossy_decoding(tmp_path):
     assert "text-decode-lossy" in flagged.mirror.header["verify"]
 
 
+@pytest.mark.parametrize("media_type", ["application/csv", "text/csv"])
+def test_csv_sniffer_aliases_convert_without_changing_source(tmp_path, monkeypatch, media_type):
+    original = (
+        b"date,item,quantity,unit,note\r\n"
+        b"1871-05-02,lamp oil,40,gallons,first season\r\n"
+        b"1871-05-02,wicks,24,each,\r\n"
+        b"1871-06-14,coal,2,tons,engine house\r\n"
+        b"1871-07-01,brass polish,6,tins,\r\n"
+    )
+    path = tmp_path / "supply-ledger.csv"
+    path.write_bytes(original)
+    # Exercise the real sniff/dispatch path with each platform's file(1) response.
+    detector = tmp_path / "file"
+    detector.write_text(f"#!{sys.executable}\nprint({media_type!r})\n", encoding="utf-8")
+    detector.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    result = convert_file(path, options=ConversionOptions(title="Supplies"))
+    assert path.read_bytes() == original, "CSV SOURCE BYTES MUST REMAIN UNCHANGED"
+    header, body = round_trip(result, path)
+    assert (result.method, header["media_type"], body) == (
+        "text-decode:utf-8",
+        media_type,
+        "# Supplies\n\n" + original.decode("ascii").replace("\r\n", "\n"),
+    ), "CSV ALIASES MUST USE THE TEXT CONVERSION PATH"
+
+
 def test_image_without_ocr_is_marked_pending(tmp_path, raster_png):
     path = tmp_path / "photo"
     path.write_bytes(raster_png)
