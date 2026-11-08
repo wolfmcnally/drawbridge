@@ -1,0 +1,15 @@
+{
+  "acceptance": {
+    "path": ".kickoff/runs/release-dispatch-e8yviftv/closure.json",
+    "sha256": "0ab7e39a79d6e2cbd5b9438a03c90678df0181efcb0a41ad696b887bb0432e8c"
+  },
+  "claim": "foldedspace:1a8b0ab6-f0f2-4b19-9e64-c99605720038/native:codex/3dcfd5c0-9b0c-46d1-92bd-50fa42b0d195/01a1b779-8e54-7010-a43d-b7c5fac1e873;release-resume:c48a79dfb4b09bc0fd0f92a0c14401338c217c87dbe5326b50f789e6031056a7;publication-seam:08b7b7607132cac6014d8b857c4bfe1fdf1c1707e4a2d86cb3b7f03d8ea58925",
+  "from": "in-progress",
+  "id": "dda0800fe77142578c78e4434785239f",
+  "owner": "drawbridge-maintainer",
+  "phase": "pptx-release-qualification",
+  "previous": "5336593073134ed88a07dfbf9e6a62e1",
+  "reason": "Actual unchanged signed0.3.0 source manual CI, verified publication/anonymous exact-byte readback and all nine current parent gates accepted. Human sample remains open; distinct post-bookkeeping bare handoff and final signed source bookkeeping delivery remain required.",
+  "state": "completed",
+  "writer": "drawbridge-maintainer"
+}
