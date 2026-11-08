@@ -7,5 +7,6 @@ These are the preserved first-party Drawbridge guides. Third-party reference pin
 - [Licensing](LICENSING.md)
 - [Page Citations](PAGE-CITATIONS.md)
 - [PowerPoint](POWERPOINT.md)
+- [Release facts](RELEASES.md)
 - [Troubleshooting](TROUBLESHOOTING.md)
 - [Usage](USAGE.md)

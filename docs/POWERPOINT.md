@@ -71,6 +71,33 @@ From a source checkout, create the small synthetic sample used by the tests:
 ./bin/python -c 'from pathlib import Path; import sys; sys.path.insert(0, "tests"); from presentation_fixtures import build_deck; build_deck(Path("sample.pptx"))'
 ```
 
+With both release files downloaded and the wheel installed in `.venv`, extract the matching source archive:
+
+```bash
+tar -xzf drawbridge-0.3.0.tar.gz
+```
+
+Create the same fixture with that installed environment and the extracted public tests:
+
+```bash
+.venv/bin/python -c 'from pathlib import Path; import sys; sys.path.insert(0, "drawbridge-0.3.0/tests"); from presentation_fixtures import build_deck; build_deck(Path("sample.pptx"))'
+```
+
+The source archive does not include the maintainer's `bin/` tools.
+
+Convert and verify with the installed commands (no shell activation required):
+
+```bash
+.venv/bin/drawbridge convert sample.pptx --notes include -o sample.md
+```
+
+```bash
+.venv/bin/drawbridge verify sample.md --source sample.pptx
+```
+
 Then convert and verify it using the commands above with `sample.pptx`. It contains deliberately reordered slides, attached notes, a hidden slide, grouped/table text, repeated image uses an empty slide and two paragraph-build metadata records on one slide. This demonstrates section accounting, not animation playback. Human inspection remains necessary for readability and suitability. Downloaded qualification decks and their mirrors are private evidence and are not distributed.
 
 Malformed presentation errors expose a stable short code through the API and CLI JSON reason, including `duplicate-member`, `unsafe-member`, `xml-doctype`, `missing-internal-target`, `ambiguous-slide-identity` and `ambiguous-notes-owner`. Resource refusals remain a distinct type, with `xml-byte-limit` or `expanded-byte-limit` where identified. Missing containment/runtime capability is distinct from a reader that terminates after its startup handshake; an unexplained post-startup crash is operational and is not claimed to prove malformed input.
+
+
+Drawbridge 0.3.0 promotes this native slide interface without changing the qualified 0.3.0.dev0 extraction behavior. See [release facts](RELEASES.md) for the exact publication and platform boundaries.

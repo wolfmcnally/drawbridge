@@ -1,0 +1,15 @@
+{
+  "acceptance": {
+    "path": ".kickoff/runs/release-artifacts-s5s01e7v/closure.json",
+    "sha256": "7f4562e0ff0569037b5bca548ef144a33923bfde39d7aa23464e6617f61ba302"
+  },
+  "claim": "foldedspace:1a8b0ab6-f0f2-4b19-9e64-c99605720038/native:codex/3dcfd5c0-9b0c-46d1-92bd-50fa42b0d195/01a1b779-8e54-7010-a43d-b7c5fac1e873;release-resume:c48a79dfb4b09bc0fd0f92a0c14401338c217c87dbe5326b50f789e6031056a7;publication-seam:08b7b7607132cac6014d8b857c4bfe1fdf1c1707e4a2d86cb3b7f03d8ea58925",
+  "from": "in-progress",
+  "id": "0d01ba6e99f944fc86cb98f0551e1d32",
+  "owner": "drawbridge-maintainer",
+  "phase": "qualify-release-artifacts",
+  "previous": "d6f8e3e19a0746f9b1deb8facd8ebdfc",
+  "reason": "Final0.3.0 source/artifact candidate accepted on current five-stage gates. Human sample review stays open; distinct bare handoff and normal source delivery remain required. Release parent remains active for actual publication evidence.",
+  "state": "completed",
+  "writer": "drawbridge-maintainer"
+}

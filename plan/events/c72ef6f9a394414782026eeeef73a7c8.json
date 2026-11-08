@@ -1,0 +1,10 @@
+{
+  "from": null,
+  "id": "c72ef6f9a394414782026eeeef73a7c8",
+  "owner": null,
+  "phase": "qualify-release-artifacts",
+  "previous": null,
+  "reason": "New phase; not a claim or acceptance",
+  "state": "not-started",
+  "writer": "drawbridge-maintainer"
+}

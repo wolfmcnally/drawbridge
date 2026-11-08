@@ -1,10 +1,10 @@
-# Install Drawbridge 0.2.0
+# Install Drawbridge 0.3.0
 
 Python 3.12+ and uv are required for the examples. From the directory containing the downloaded wheel:
 
 ```bash
 uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python ./drawbridge-0.2.0-py3-none-any.whl
+uv pip install --python .venv/bin/python ./drawbridge-0.3.0-py3-none-any.whl
 .venv/bin/drawbridge --version
 printf 'Plain local evidence.\n' > example.txt
 .venv/bin/drawbridge convert example.txt --no-profile --stdout
@@ -31,10 +31,10 @@ uv export --locked --no-dev --no-emit-project --format requirements-txt --output
 python3 scripts/split_conric_requirements.py requirements.txt registry-requirements.txt
 uv pip install --python .venv/bin/python --require-hashes --requirements registry-requirements.txt
 uv pip install --python .venv/bin/python --no-deps --build-constraints build-constraints.txt 'conric @ git+https://github.com/wolfmcnally/conric.git@ed9286297e92b8c049f70eb15a3b5556ed107ff0'
-uv pip install --python .venv/bin/python --no-deps ./dist/drawbridge-0.2.0-py3-none-any.whl
+uv pip install --python .venv/bin/python --no-deps ./dist/drawbridge-0.3.0-py3-none-any.whl
 ```
 
-The helper refuses a changed or missing Conric source and any additional direct URL/VCS requirement. Source builds use build-constraints.txt; matching source includes tests, methodology/design docs, the helper and notices. The audio extra has its separate pinned source procedure below.
+The helper refuses a changed or missing Conric source and any additional direct URL/VCS requirement. Source builds use build-constraints.txt; matching source includes product tests and design docs, the helper and notices. The audio extra has its separate pinned source procedure below.
 
 The optional audio extra installs the **Quillric** distribution. Its compatibility Python namespace/CLI and retained artifact directories remain `transcribe`; do not install a separate old distribution named transcribe. Provider stages need an explicit profile and keys and can incur charges. Start with dry-run; those paid examples are not part of local PDF release qualification.
 
@@ -45,8 +45,14 @@ Quillric 0.1.0 is absent from PyPI at preparation. Its exact locked Git commit i
 ```bash
 uv venv --python 3.12 .venv-audio
 uv pip install --python .venv-audio/bin/python 'quillric @ git+https://github.com/wolfmcnally/quillric.git@c48b76e522f4e677df9184a2e82469ddcdb9cee9'
-uv pip install --python .venv-audio/bin/python './drawbridge-0.2.0-py3-none-any.whl[audio]'
+uv pip install --python .venv-audio/bin/python './drawbridge-0.3.0-py3-none-any.whl[audio]'
 .venv-audio/bin/drawbridge --version
 ```
 
 This route requires Git and network access to the public source and dependency index. Audio/video processing additionally needs ffmpeg and the selected provider credentials. Installation and CLI startup make no provider calls.
+
+## PowerPoint and release verification
+
+Ordinary PowerPoint ingestion needs the separately installed locked python-pptx, lxml and XlsxWriter dependencies; no renderer or PDF engine is needed. The worker requires its documented operating-system controls. Installed PowerPoint qualification targets Python 3.12.12 on macOS arm64 and Linux aarch64. Fresh installed native/configured/OCR PDF qualification is on macOS arm64 only. Other advertised Python versions, including the 3.13 and 3.14 classifiers, are not additional installation-trial claims. See [PowerPoint boundaries](POWERPOINT.md) and [release facts](RELEASES.md).
+
+The wheel and matching source archive are the public installation artifacts. The source archive supplies its lock, build constraints, notices, public fixtures and product tests. A public repository checkout can run product tests with declared prerequisites. The complete maintainer gate also audits private retained phase acceptance under ignored operational storage; a fresh public clone does not contain that proof and cannot replay that portion of the gate. Public CI runs the product test wrapper and does not establish private historical acceptance. No private proof is needed to install or use the release artifacts, and it must not be copied into them.

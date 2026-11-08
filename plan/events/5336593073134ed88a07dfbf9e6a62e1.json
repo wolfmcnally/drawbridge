@@ -1,0 +1,11 @@
+{
+  "claim": "foldedspace:1a8b0ab6-f0f2-4b19-9e64-c99605720038/native:codex/3dcfd5c0-9b0c-46d1-92bd-50fa42b0d195/01a1b779-8e54-7010-a43d-b7c5fac1e873;release-resume:c48a79dfb4b09bc0fd0f92a0c14401338c217c87dbe5326b50f789e6031056a7;publication-seam:08b7b7607132cac6014d8b857c4bfe1fdf1c1707e4a2d86cb3b7f03d8ea58925",
+  "from": "next",
+  "id": "5336593073134ed88a07dfbf9e6a62e1",
+  "owner": "drawbridge-maintainer",
+  "phase": "pptx-release-qualification",
+  "previous": "40de8f22f54a41b69f3b68af57ff7e29",
+  "reason": "Authorized release continuation under the same sole owner; explicit independently accepted source/artifact prerequisite and actual publication parent; no active conflicting native writer.",
+  "state": "in-progress",
+  "writer": "drawbridge-maintainer"
+}
