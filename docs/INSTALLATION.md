@@ -1,10 +1,10 @@
-# Install Drawbridge 0.3.0
+# Install Drawbridge 0.3.1
 
 Python 3.12+ and uv are required for the examples. From the directory containing the downloaded wheel:
 
 ```bash
 uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python ./drawbridge-0.3.0-py3-none-any.whl
+uv pip install --python .venv/bin/python ./drawbridge-0.3.1-py3-none-any.whl
 .venv/bin/drawbridge --version
 printf 'Plain local evidence.\n' > example.txt
 .venv/bin/drawbridge convert example.txt --no-profile --stdout
@@ -22,7 +22,7 @@ Use the real absolute executable path, not the illustrative placeholder. No sibl
 
 Explicit composed configuration requires the Conric-aware Vellric CLI. As of 2026-10-29, [Vellric 0.2.4](https://github.com/wolfmcnally/vellric/releases/tag/v0.2.4) is a public regular release at commit `8b410165a52b246e72dc2ac326ce9e289c80aa43`. Install its trusted release wheel into its own environment using the matching source archive's lock and installation instructions, then select it with `DRAWBRIDGE_VELLRIC`. Drawbridge's CI verifies the exact release artifact hashes before installing registry dependencies with hashes and the exact public Conric source separately. Doctor schema/behavior admission and complete job validation still apply. Cloud-vision human acceptance and Windows desktop acceptance remain open upstream; this integration does not establish either. Configuration forwarding preserves the credential scrub and does not enable authenticated provider execution. See [explicit configuration usage](USAGE.md#explicit-composed-configuration).
 
-Drawbridge's runtime dependency pins public MIT Conric 0.1.0 to the flat repository root at `https://github.com/wolfmcnally/conric`, commit `ed9286297e92b8c049f70eb15a3b5556ed107ff0`. Wheel dependency installation requires Git and network access to that source; it does not require a sibling source checkout. Vellric and its PDF engine remain outside the Drawbridge runtime environment.
+Drawbridge's runtime dependency pins public MIT Conric 0.1.0 to the flat repository root at `https://github.com/wolfmcnally/conric`, release tag `v0.1.0` (resolved in the lock to `ed9286297e92b8c049f70eb15a3b5556ed107ff0`). Wheel dependency installation requires Git and network access to that source; it does not require a sibling source checkout. Vellric and its PDF engine remain outside the Drawbridge runtime environment.
 
 For locked source development, use `uv sync --locked`. For a core wheel installation with registry hashes enforced, export the lock, separate the single approved Conric Git reference using the matching source's helper, and install that immutable source separately. A full `--require-hashes` requirements file cannot include a Git dependency. From matching source, after creating `.venv`:
 
@@ -30,8 +30,8 @@ For locked source development, use `uv sync --locked`. For a core wheel installa
 uv export --locked --no-dev --no-emit-project --format requirements-txt --output-file requirements.txt
 python3 scripts/split_conric_requirements.py requirements.txt registry-requirements.txt
 uv pip install --python .venv/bin/python --require-hashes --requirements registry-requirements.txt
-uv pip install --python .venv/bin/python --no-deps --build-constraints build-constraints.txt 'conric @ git+https://github.com/wolfmcnally/conric.git@ed9286297e92b8c049f70eb15a3b5556ed107ff0'
-uv pip install --python .venv/bin/python --no-deps ./dist/drawbridge-0.3.0-py3-none-any.whl
+uv pip install --python .venv/bin/python --no-deps --build-constraints build-constraints.txt 'conric @ git+https://github.com/wolfmcnally/conric.git@v0.1.0'
+uv pip install --python .venv/bin/python --no-deps ./dist/drawbridge-0.3.1-py3-none-any.whl
 ```
 
 The helper refuses a changed or missing Conric source and any additional direct URL/VCS requirement. Source builds use build-constraints.txt; matching source includes product tests and design docs, the helper and notices. The audio extra has its separate pinned source procedure below.
@@ -40,12 +40,12 @@ The optional audio extra installs the **Quillric** distribution. Its compatibili
 
 Developer setup: `uv sync --locked --group dev`, configure the independent Vellric executable, then `uv run --locked pytest`. Existing live tests require actual qualified OCR tools; they are not silently skipped when the engine is missing.
 
-Quillric 0.1.0 is absent from PyPI at preparation. Its exact locked Git commit is publicly reachable. From the directory containing the Drawbridge wheel, install the source dependency first, then the audio extra:
+Optional Quillric is installed from its published `v0.1.0` GitHub release tag, resolved by the lock to the previously qualified commit. From the directory containing the Drawbridge wheel, install the tagged source dependency first, then the audio extra:
 
 ```bash
 uv venv --python 3.12 .venv-audio
-uv pip install --python .venv-audio/bin/python 'quillric @ git+https://github.com/wolfmcnally/quillric.git@c48b76e522f4e677df9184a2e82469ddcdb9cee9'
-uv pip install --python .venv-audio/bin/python './drawbridge-0.3.0-py3-none-any.whl[audio]'
+uv pip install --python .venv-audio/bin/python 'quillric @ git+https://github.com/wolfmcnally/quillric.git@v0.1.0'
+uv pip install --python .venv-audio/bin/python './drawbridge-0.3.1-py3-none-any.whl[audio]'
 .venv-audio/bin/drawbridge --version
 ```
 

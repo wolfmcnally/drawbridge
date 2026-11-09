@@ -208,7 +208,7 @@ wheels = [
 [[package]]
 name = "conric"
 version = "0.1.0"
-source = { git = "https://github.com/wolfmcnally/conric.git?rev=ed9286297e92b8c049f70eb15a3b5556ed107ff0#ed9286297e92b8c049f70eb15a3b5556ed107ff0" }
+source = { git = "https://github.com/wolfmcnally/conric.git?rev=v0.1.0#ed9286297e92b8c049f70eb15a3b5556ed107ff0" }
 dependencies = [
     { name = "pyyaml" },
 ]
@@ -248,7 +248,7 @@ wheels = [
 
 [[package]]
 name = "drawbridge"
-version = "0.3.0"
+version = "0.3.1"
 source = { editable = "." }
 dependencies = [
     { name = "conric" },
@@ -280,14 +280,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "conric", git = "https://github.com/wolfmcnally/conric.git?rev=ed9286297e92b8c049f70eb15a3b5556ed107ff0" },
+    { name = "conric", git = "https://github.com/wolfmcnally/conric.git?rev=v0.1.0" },
     { name = "lxml", specifier = "==6.1.3" },
     { name = "olefile", specifier = ">=0.47" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pillow", specifier = ">=11.3,<13" },
     { name = "python-pptx", specifier = "==1.0.2" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "quillric", marker = "extra == 'audio'", git = "https://github.com/wolfmcnally/quillric.git?rev=c48b76e522f4e677df9184a2e82469ddcdb9cee9" },
+    { name = "quillric", marker = "extra == 'audio'", git = "https://github.com/wolfmcnally/quillric.git?tag=v0.1.0" },
     { name = "xlrd", specifier = ">=2.0.2" },
     { name = "xlsxwriter", specifier = "==3.3.1" },
 ]
@@ -299,7 +299,7 @@ dev = [
     { name = "pymupdf", specifier = "==1.28.2" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-xdist", specifier = ">=3.8,<4" },
-    { name = "quillric", git = "https://github.com/wolfmcnally/quillric.git?rev=c48b76e522f4e677df9184a2e82469ddcdb9cee9" },
+    { name = "quillric", git = "https://github.com/wolfmcnally/quillric.git?tag=v0.1.0" },
     { name = "ruamel-yaml", specifier = ">=0.18,<0.19" },
     { name = "ruff", specifier = ">=0.6" },
 ]
@@ -1081,7 +1081,7 @@ wheels = [
 [[package]]
 name = "quillric"
 version = "0.1.0"
-source = { git = "https://github.com/wolfmcnally/quillric.git?rev=c48b76e522f4e677df9184a2e82469ddcdb9cee9#c48b76e522f4e677df9184a2e82469ddcdb9cee9" }
+source = { git = "https://github.com/wolfmcnally/quillric.git?tag=v0.1.0#c48b76e522f4e677df9184a2e82469ddcdb9cee9" }
 
 [[package]]
 name = "rich"

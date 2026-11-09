@@ -14,6 +14,6 @@ The selected macOS lxml wheel lists zlib, iconv, libxml2, libxslt and libexslt. 
 
 A downloaded public lecture deck was used only as private qualification input under its recorded terms. Neither it nor its mirrors/assets are in the source or distribution allowlist. Public examples and tests author their own small synthetic decks. Extraction defaults do not grant permission to publish presenter notes.
 
-Drawbridge 0.3.0 retains these independently installed dependency boundaries. Source qualification and installed tests do not themselves establish public publication; the release workflow verifies the actual signed tag and downloaded artifact identity separately.
+Drawbridge 0.3.1 retains these independently installed dependency boundaries. Source qualification and installed tests do not themselves establish public publication; the release workflow verifies the actual signed tag and downloaded artifact identity separately.
 
 The native-component inventory above is scoped to the selected macOS wheel. Linux selects a separate manylinux aarch64 lxml artifact; consult that installed distribution’s LICENSES.txt and licenses directory for its actual bundled components and grants rather than applying the macOS inventory to it. Neither dependency wheel is redistributed inside Drawbridge.

@@ -1,6 +1,6 @@
 # Drawbridge
 
-Any file in, one Markdown mirror out. A mirror is a plain-text twin of a document: a YAML provenance header that names the exact bytes it was made from, then the document's text in sections that match the original's own units (pages, sheets, a message). Local fidelity conversion preserves the input and ends in an inspectable mirror, typed failure or truthful deferred stub. Optional audio/model stages require explicit profiles or composed configuration and report their egress. The release candidate is **0.3.0**, under **MIT**.
+Any file in, one Markdown mirror out. A mirror is a plain-text twin of a document: a YAML provenance header that names the exact bytes it was made from, then the document's text in sections that match the original's own units (pages, sheets, a message). Local fidelity conversion preserves the input and ends in an inspectable mirror, typed failure or truthful deferred stub. Optional audio/model stages require explicit profiles or composed configuration and report their egress. The release candidate is **0.3.1**, under **MIT**.
 
 | Input | How | Sections |
 |---|---|---|
@@ -31,7 +31,7 @@ With Python 3.12+, uv, Git and network access to the pinned public Conric source
 
 ```bash
 uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python ./drawbridge-0.3.0-py3-none-any.whl
+uv pip install --python .venv/bin/python ./drawbridge-0.3.1-py3-none-any.whl
 .venv/bin/drawbridge --version
 printf 'Plain local evidence.\n' > example.txt
 .venv/bin/drawbridge convert example.txt --no-profile --stdout
@@ -131,12 +131,12 @@ per-call API (requires distribution `quillric>=0.1.0`). It does not overwrite
 arguments: `elevenlabs_api_key` and, only when leveling is selected,
 `auphonic_api_key`.
 
-Quillric 0.1.0 is absent from PyPI at preparation. Its exact locked Git commit is publicly reachable. From the directory containing the Drawbridge wheel, install the source dependency first, then the audio extra:
+Optional Quillric is installed from its published `v0.1.0` GitHub release tag, resolved by the lock to the previously qualified commit. From the directory containing the Drawbridge wheel, install the tagged source dependency first, then the audio extra:
 
 ```bash
 uv venv --python 3.12 .venv-audio
-uv pip install --python .venv-audio/bin/python 'quillric @ git+https://github.com/wolfmcnally/quillric.git@c48b76e522f4e677df9184a2e82469ddcdb9cee9'
-uv pip install --python .venv-audio/bin/python './drawbridge-0.3.0-py3-none-any.whl[audio]'
+uv pip install --python .venv-audio/bin/python 'quillric @ git+https://github.com/wolfmcnally/quillric.git@v0.1.0'
+uv pip install --python .venv-audio/bin/python './drawbridge-0.3.1-py3-none-any.whl[audio]'
 .venv-audio/bin/drawbridge --version
 ```
 
@@ -233,9 +233,9 @@ Vellric supervises its worker and recognizers, but this process boundary is not 
 
 ### Prepared local release build
 
-Drawbridge 0.3.0 adds ordinary native PowerPoint ingestion and physical PDF page-citation maps. Build with `SOURCE_DATE_EPOCH=1609459200 uv build . --python 3.12 --build-constraints build-constraints.txt`. Its source includes uv.lock, exact build constraints and NOTICE, including separate public fixture grants. As of 2026-10-29, CI selects the public Vellric 0.2.4 wheel and matching source archive by exact hashes. See [physical PDF page citations](docs/PAGE-CITATIONS.md) for the new schema, mapping and rendering limits. Publication and artifact identity are verified separately at the established GitHub Releases destination. Live consumer upgrades remain separately authorized.
+Drawbridge 0.3.1 fixes CSV conversion when libmagic reports `application/csv`, preserving the original bytes and existing `text/csv` behavior. It retains the ordinary native PowerPoint ingestion and physical PDF page-citation maps introduced in 0.3.0. Build with `SOURCE_DATE_EPOCH=1609459200 uv build . --python 3.12 --build-constraints build-constraints.txt`. Its source includes uv.lock, exact build constraints and NOTICE, including separate public fixture grants. As of 2026-10-29, CI selects the public Vellric 0.2.4 wheel and matching source archive by exact hashes. See [physical PDF page citations](docs/PAGE-CITATIONS.md) for the new schema, mapping and rendering limits. Publication and artifact identity are verified separately at the established GitHub Releases destination. Live consumer upgrades remain separately authorized.
 
-Optional audio installation uses the publicly reachable pinned Quillric source shown above; Quillric 0.1.0 is absent from PyPI at preparation. The core quickstart and PDF boundary do not require it. See [the installation guide](docs/INSTALLATION.md).
+Optional audio installation uses the published Quillric `v0.1.0` release tag shown above. The core quickstart and PDF boundary do not require it. See [the installation guide](docs/INSTALLATION.md).
 
 PowerPoint mirrors use `drawbridge.mirror.v2` with `unit: slide` and a source-bound map of separate content and notes spans. Existing v1 behavior remains supported. See the [PowerPoint guide](docs/POWERPOINT.md) for notes precedence, source verification, native-only limitations and platform controls.
 

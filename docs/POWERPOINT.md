@@ -74,13 +74,13 @@ From a source checkout, create the small synthetic sample used by the tests:
 With both release files downloaded and the wheel installed in `.venv`, extract the matching source archive:
 
 ```bash
-tar -xzf drawbridge-0.3.0.tar.gz
+tar -xzf drawbridge-0.3.1.tar.gz
 ```
 
 Create the same fixture with that installed environment and the extracted public tests:
 
 ```bash
-.venv/bin/python -c 'from pathlib import Path; import sys; sys.path.insert(0, "drawbridge-0.3.0/tests"); from presentation_fixtures import build_deck; build_deck(Path("sample.pptx"))'
+.venv/bin/python -c 'from pathlib import Path; import sys; sys.path.insert(0, "drawbridge-0.3.1/tests"); from presentation_fixtures import build_deck; build_deck(Path("sample.pptx"))'
 ```
 
 The source archive does not include the maintainer's `bin/` tools.

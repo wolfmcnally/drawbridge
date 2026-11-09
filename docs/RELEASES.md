@@ -1,10 +1,10 @@
-# Drawbridge 0.3.0 release facts
+# Drawbridge 0.3.1 release facts
 
-The 0.3.0 candidate adds ordinary native PowerPoint ingestion and includes the physical PDF citation integration while preserving existing page mirrors and the independent PDF-engine boundary. Public publication is a separate verified operation: use the established GitHub Releases destination and compare the actual downloaded artifact digests with its release notes. A prepared candidate is not proof of a published release.
+The 0.3.1 patch candidate includes the CSV correction: content sniffed as `application/csv` uses the same source-preserving text path as `text/csv`. Binary content and unknown application media types remain deferred. It retains the ordinary native PowerPoint ingestion, physical PDF citation integration, existing page mirrors and independent PDF-engine boundary from 0.3.0. Public publication is a separate verified operation: use the established GitHub Releases destination and compare the actual downloaded artifact digests with its release notes. A prepared candidate is not proof of a published release.
 
 ## Public artifacts
 
-The intended downloadable files are `drawbridge-0.3.0-py3-none-any.whl` and `drawbridge-0.3.0.tar.gz`. The source archive includes the lock, exact build constraints, source, public product tests/fixtures and notices. Dependency native binaries, private phase proof, operational logs, downloaded trial decks and their derivatives are excluded. Conric remains an exact public Git dependency, so the destination is GitHub Releases rather than a package index. Follow [installation](INSTALLATION.md).
+The intended downloadable files are `drawbridge-0.3.1-py3-none-any.whl` and `drawbridge-0.3.1.tar.gz`. The source archive includes the lock, exact build constraints, source, public product tests/fixtures and notices. Dependency native binaries, private phase proof, operational logs, downloaded trial decks and their derivatives are excluded. Conric and optional Quillric reference their published `v0.1.0` tags, resolved by the lock to the same previously qualified commits. Conric remains a public Git dependency, so the destination is GitHub Releases rather than a package index. Follow [installation](INSTALLATION.md).
 
 ## Product boundaries
 
