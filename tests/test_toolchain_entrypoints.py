@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -135,6 +136,27 @@ def test_test_defaults_to_every_repository_test_from_any_cwd(
     ]
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="Dropbox ignore attributes are macOS-only")
+def test_wrapper_run_excludes_runtime_state_from_dropbox_sync(
+    toolchain_repo: tuple[Path, dict[str, str]],
+) -> None:
+    root, environment = toolchain_repo
+
+    result = _run(root, environment, "setup")
+
+    assert result.returncode == 0, result.stderr
+    for attribute in ("com.dropbox.ignored", "com.apple.fileprovider.ignore#P"):
+        stored = subprocess.run(
+            ["/usr/bin/xattr", "-p", attribute, str(root / ".kickoff")],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert stored.stdout.strip() == "1", (
+            f"RUNTIME STATE NOT SYNC-EXCLUDED {attribute}: {stored.stderr}"
+        )
+
+
 def _assert_selected_repository(
     root: Path,
     environment: dict[str, str],
@@ -188,6 +210,44 @@ def test_test_governed_lanes_run_selected_proofs(
             "-m pytest -q tests/test_check.py"
         ),
     ]
+
+
+def test_reuse_lane_runs_native_runner_families_and_nothing_when_nothing_changed(
+    toolchain_repo: tuple[Path, dict[str, str]],
+) -> None:
+    root, environment = toolchain_repo
+    stub = root / "bin" / "test-governance"
+    runner = f"{root}/lib/agentic_starter/test_runner.py -m pytest"
+
+    _write_executable(
+        stub,
+        "#!/usr/bin/env bash\n"
+        '[[ "$1" == select ]] || exit 0\n'
+        "printf '%s\\n' FOCUSED 'fixture selection' tests/test_check.py "
+        "'command project/tests/smoke.rs --quiet'\n",
+    )
+    selected = _run(root, environment, "test", "--reuse")
+    selected_calls = [call for call in _calls(environment) if runner in call]
+    Path(environment["TOOLCHAIN_TEST_LOG"]).unlink()
+    _write_executable(
+        stub,
+        "#!/usr/bin/env bash\n"
+        '[[ "$1" == select ]] || exit 0\n'
+        "printf '%s\\n' NONE 'nothing changed'\n",
+    )
+    unchanged = _run(root, environment, "test", "--reuse")
+
+    assert (
+        selected.returncode == 0
+        and [call.split(runner, 1)[1] for call in selected_calls]
+        == [" -q tests/test_check.py", " project/tests/smoke.rs --quiet"]
+        and unchanged.returncode == 0
+        and not any(runner in call for call in _calls(environment))
+    ), (
+        "REUSE LANE SKIPPED A NATIVE-RUNNER FAMILY OR RAN TESTS WHEN NOTHING CHANGED: "
+        + selected.stderr
+        + unchanged.stderr
+    )
 
 
 @pytest.mark.parametrize(

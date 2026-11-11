@@ -47,6 +47,12 @@ are stable from any caller directory.
 ./bin/test --changed-from HEAD~1
 ```
 
+```bash
+./bin/test --reuse
+```
+
+`--reuse` is the lane the full gate uses: it runs the families that changes since the last fully passing tree can affect, everything when that tree or the runtime is unknown, and nothing when no covered or read path changed. A bare `./bin/test` always runs everything and, on a pass, records the tree that later reuse runs compare against.
+
 The governed lanes use the recipient-local `tests/proof-estate.yaml`. Vital
 runs every locally admitted fast family; changed runs the union of every family
 mapped to the live diff. Invalid governance, an unresolved ref, or an unmapped
@@ -76,17 +82,13 @@ failed dependency probe stops the command; no managed or ambient fallback is
 tried. Select a base interpreter outside `.venv`; an interpreter inside
 the environment uv manages is rejected before synchronization can replace it.
 
-### `_python-toolchain` — shared runtime resolver and probe
+### `_python-toolchain` — shared runtime resolver, probe and sync exclusion
 
-Source-only helper used by `setup`, `test`, `check`, and `python`. It validates
-the Python bundle, resolves the managed default or authoritative override, and
-runs the real project-and-tool dependency probe with the same selection
-arguments used by the eventual command. It is part of the atomic toolchain
-contract and is not invoked directly.
+Source-only helper used by `setup`, `test`, `check`, and `python`. It validates the Python bundle, resolves the managed default or authoritative override, and runs the real project-and-tool dependency probe with the same selection arguments used by the eventual command. On macOS its initialiser also creates `.kickoff/` and marks it excluded from Dropbox syncing on every run, whether or not the checkout is inside a Dropbox folder; a failed marking stops the entry point ([build gates](../policies/build-gates.md#runtime-state-stays-out-of-file-syncing)). It is part of the atomic toolchain contract and is not invoked directly.
 
 ### `check` — authoritative repository build gate
 
-The single authoritative entry point for automated repository checks. It resolves the repo root from its own location, validates the complete toolchain bundle, probes the selected locked environment, then runs the selected named mode with the identical runtime selection. Its `test` mode delegates to `bin/test`. `all` validates immutable logs before expensive work, then runs lint, format verification, tests, and deterministic policy checks including final log revalidation in order. Child failures retain their exact status and emit a terminal `CHECK <name> FAIL`; success ends with `CHECK ALL PASS`. Every `all` run also captures a complete durable log and terminal run metadata under `.kickoff/check-all/`; success stores a receipt bound to the exact candidate, environment fingerprint, and log digest.
+The single authoritative entry point for automated repository checks. It resolves the repo root from its own location, validates the complete toolchain bundle, probes the selected locked environment, then runs the selected named mode with the identical runtime selection. Its `test` mode delegates to `bin/test`. `all` validates immutable logs before expensive work, then runs lint, format verification, tests, and deterministic policy checks including final log revalidation in order. Child failures retain their exact status and emit a terminal `CHECK <name> FAIL`; success ends with `CHECK ALL PASS`. The test lane of `all` runs through `bin/test --reuse`, so proofs whose inputs are unchanged since the last fully passing tree are not repeated; `all --no-reuse` runs every test. `report` runs every lane to the end for diagnosis, names each failed or incomplete lane in a final `CHECK REPORT` line, and never stores a receipt. Each lane's terminal line carries its elapsed seconds. Every `all` run also captures a complete durable log and terminal run metadata under `.kickoff/check-all/`; success stores a receipt bound to the exact candidate, environment fingerprint, and log digest.
 
 ```bash
 ./bin/check
@@ -111,6 +113,8 @@ lockfile. Behavioral coverage lives in
 ### `test-governance` — test value, authoring witnesses, and safe selection
 
 Inventories families, expanded leaves, gates and hooks; validates preserved baseline/ledger replay, explicit pending review, witness references and direct risks; reports diagnostic runtime without thresholds or automatic reruns; records authoring observations; and selects vital/changed feedback. `lib/agentic_starter/test_runner.py` supplies the Python profile's separately qualified process-group hang supervision. Timeout/interruption is incomplete evidence, never a pass or a red witness. Runtime startup remains outside this guard. The supervisor puts tests in their own session and forwards TERM, INT and HUP; killing the supervisor with SIGKILL can orphan that group. Enclosing tools must allow cleanup or track both owned groups. Deliberately detached descendants need separate cleanup.
+
+`admit --input-json <file>` is the one-step form for a new or changed proof: it plants the described defect as an exact text replacement, requires the named failure, restores the tree, and records the witness receipt and the admission or modification row together. It refuses before planting anything when the result could not be recorded, so give it every unadmitted proof in one input, and it keeps each planted defect in `tests/proof-plants.json` so a proof can later be admitted elsewhere without restating it. It also provides `select --reuse` and the `reuse begin` and `reuse finish` commands that `bin/test` uses to record the last fully passing tree; do not run those by hand.
 
 `witness begin` runs the named command and requires it to pass, then journals the
 named files. Plant the defect in those files, and `witness finish` requires the
@@ -401,6 +405,12 @@ runtime data. An empty archive is valid before the first completed phase.
 ./bin/check-execution-dashboards
 ```
 
+```bash
+./bin/check-execution-dashboards --regenerate
+```
+
+`--regenerate` rewrites any tracked report file that differs from its regeneration, from tracked inputs only, then applies every other check. The plain form never writes.
+
 ### `serve-execution-dashboard` — local report server
 
 Serves `reports/execution/` on loopback for browser review. `kickoff` uses its
@@ -648,6 +658,10 @@ The pinned `grant-advice-exception` subcommand records an already verified User 
 
 `review-verdicts --advisory-run <run-directory>` reads canonical advisory observations and primary decisions into separate dataset arrays, without treating declined advice as a rejection loop. Repeat the option for selected runs; historical transcript verdict harvesting remains unchanged. A stored primary decision is historical evidence, not proof that today's working tree is accepted.
 
+### A registration that was never launched
+
+`kickoff-evidence record-unlaunched-attempt --run-dir <run> --registration <registration.json> --refusal-artifact <file inside the run>` records that a registered attempt was refused before anything launched. It is accepted only while no dispatch row, execution span or advisory claim exists for the attempt, and validation re-proves that each time. `register-role-attempt` refuses a later attempt of an operation while an earlier one was never dispatched and names the relaunch. The supervised test runner builds each script tool's cached environment once before starting parallel workers.
+
 ### Immutable advice-source recovery
 
 `kickoff-evidence attest-advice-source --run-dir <fresh-continuation> --source-run <historical-run> --predecessor-run <earlier-run>` records a continuation-local provenance receipt for a historical numbering gap that ordinary export refuses. Invoke the fresh continuation's pinned tool, then use ordinary `carry-advice` and fresh primary acceptance. Repeat `--predecessor-run` for distinct original role predecessors; duplicate or ambiguous originals refuse. All originals remain read-only; the earlier source must independently validate all role joins, and its unique accepted launch must precede the missing attempt in the same phase budget. The receipt binds metadata, captured plans, closed spans and the original budget prefix. Repeated identical admission is idempotent; conflicts, changed originals, missing claims, wrong work items and unmatched spans refuse. An un-ingested earlier artifact is never promoted to an accepted report. This command neither launches a reviewer nor resets or consumes an allowance. See [evidence policy](../policies/orchestration-evidence.md).
@@ -660,7 +674,7 @@ An attested continuation starts its own role numbering at 1 if any additional re
 
 `execution-telemetry interrupt --trace-id <old> --successor-trace-id <new> --custody-evidence <file>` records a separately checked cross-boot interruption/successor observation without closing or rewriting the old trace. See [clock and custody requirements](../policies/execution-telemetry.md#cross-boot-interruption-observation). It supplies no missing original review evidence or new review allowance.
 
-- `multioperator` — transition rehearsal and maintenance (`rehearse`, `validate`, `add`, `order`, `event`, `append`, `render`). For terminal log records, use `append-terminal --root . --writer <operator> --content <content.json>` to compose and publish through the immutable writer, or `compose-terminal --content <content.json> --output <fresh-block.md>` to prepare the exact body for evidence close. Supply the shared `title`, `body` and explicit `lessons` array as defined in [log discipline](../policies/log-discipline.md#follow-up-correction-format); the tool never infers a lessons answer. See [the migration runbook](../policies/multi-operator-migration.md#0-unified-migration-runbook). Use `transfer-preflight --intent methodology|capability --entry teach|learn --donor <source> --recipient <destination>` for symmetric read-only routing. The same `rehearse` command accepts the explicit existing-product retrofit recipe in [the transfer runbook](../policies/multi-operator-migration.md#9-symmetric-transfer-and-existing-product-retrofit), retaining narrative history and seeding prospective records without adoption. It never grants ownership or runs Git rollback; rehearsal is not adoption.
+- `multioperator` — transition rehearsal and maintenance (`rehearse`, `validate`, `add`, `order`, `event`, `append`, `render`). `validate` verifies every retained acceptance byte that is present and reports ignored evidence absent from the checkout as `EVIDENCE NOT HELD` without refusing; `transfer-preflight` also returns the receiver's recorded methodology provenance and the source releases it has not recorded; `append` refuses a methodology close that is not an END or PARK record. For terminal log records, use `append-terminal --root . --writer <operator> --content <content.json>` to compose and publish through the immutable writer, or `compose-terminal --content <content.json> --output <fresh-block.md>` to prepare the exact body for evidence close. Supply the shared `title`, `body` and explicit `lessons` array as defined in [log discipline](../policies/log-discipline.md#follow-up-correction-format); the tool never infers a lessons answer. See [the migration runbook](../policies/multi-operator-migration.md#0-unified-migration-runbook). Use `transfer-preflight --intent methodology|capability --entry teach|learn --donor <source> --recipient <destination>` for symmetric read-only routing. The same `rehearse` command accepts the explicit existing-product retrofit recipe in [the transfer runbook](../policies/multi-operator-migration.md#9-symmetric-transfer-and-existing-product-retrofit), retaining narrative history and seeding prospective records without adoption. It never grants ownership or runs Git rollback; rehearsal is not adoption. `transfer-ancestry --donor <source> --recipient <destination> [--release <revision>]` reports, for each shared file that differs, the source revision nearest the recipient's copy, the recipient lines no source revision ever held and the conflicts a merge on that ancestor leaves; it is read-only. `adopt --root <target>` records the owner's adoption of a delivered conversion, refusing while the plan index still carries the rehearsal banner; it is the only manifest change the staged validator admits.
 
 - `multioperator` — structured records and isolated migration rehearsal; current-format semantics require separate qualification.
 

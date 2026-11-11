@@ -1,0 +1,30 @@
+{
+  "schema": "agentic.methodology-provenance.v1",
+  "source": "agentic-coding-starter",
+  "release": "1.5.0",
+  "revision": "63c689151268336fbbc9a69bb8cb0aaf0bea2379",
+  "recorded": "2026-11-11",
+  "capabilities": [
+    "Mini-method delivery within existing authority",
+    "Runtime-state sync exclusion",
+    "Gate report mode and lane timing",
+    "Evidence not held, methodology close guard, provenance preflight",
+    "Receiver provenance record",
+    "Test reuse against the last proven tree",
+    "Native-runner proof families",
+    "Parallel execution by profile and the Swift profile",
+    "Single-record methodology close",
+    "One-step proof admission",
+    "Dashboard regeneration",
+    "Admission that refuses before witnessing, and recorded defects",
+    "Gate proofs that fail a universal lane",
+    "Parallel adoption qualified through the worker boundary",
+    "Supervisor liveness probe that settles a refusal",
+    "Transfer ancestry report and adoption declaration",
+    "Edited-file merging and the legacy-recipient route",
+    "Shared-defect limits",
+    "Recorded defects for inherited proofs",
+    "Never-launched attempts and the registrar's relaunch rule",
+    "Script environments built before parallel workers"
+  ]
+}

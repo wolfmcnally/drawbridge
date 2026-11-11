@@ -94,6 +94,10 @@ printf 'treatise cwd=%s args=%s\\n' "$PWD" "$*" >> "$CHECK_TEST_LOG"
         root / "bin" / "test-governance",
         """#!/usr/bin/env bash
 printf 'governance cwd=%s args=%s\n' "$PWD" "$*" >> "$CHECK_TEST_LOG"
+# A lane every adopter has, so proofs that need a failing policy check travel unchanged.
+if [[ "${1:-}" == "timing" && -n "${CHECK_POLICY_FAIL_CODE:-}" ]]; then
+  exit "$CHECK_POLICY_FAIL_CODE"
+fi
 if [[ "${1:-}" == "select" ]]; then
   printf '%s\n' 'FOCUSED' 'fixture selection' 'tests/test_check.py'
 fi
@@ -223,12 +227,14 @@ def test_all_is_default_locked_ordered_and_cwd_independent(
             "tests"
         ),
         (f"uv cwd={root} args=run --project {root} --locked --managed-python python -c {PROBE}"),
+        f"governance cwd={root} args=select --reuse --format lines",
+        f"governance cwd={root} args=reuse begin --lane reuse",
         (
             f"uv cwd={root} args=run --project {root} --locked "
             f"--managed-python python {root}/lib/agentic_starter/test_runner.py "
-            f"-m pytest -q --junitxml {root}/.kickoff/test-timing/full.xml "
-            "-o junit_family=xunit1 tests"
+            "-m pytest -q tests/test_check.py"
         ),
+        f"governance cwd={root} args=reuse finish --exit 0",
         f"parity cwd={root}",
         f"callers cwd={root}",
         f"dashboards cwd={root}",
@@ -385,6 +391,51 @@ def test_governed_iteration_lanes_dispatch_selected_tests_without_receipt(
         for call in calls
     )
     assert not any("check-receipt" in call for call in calls)
+
+
+def test_no_reuse_runs_the_whole_suite_and_a_failing_reuse_lane_fails_the_gate(
+    check_repo: tuple[Path, dict[str, str]],
+) -> None:
+    root, environment = check_repo
+
+    uncached = _run(root, environment, "all", "--no-reuse")
+    calls = Path(environment["CHECK_TEST_LOG"]).read_text()
+    Path(environment["CHECK_TEST_LOG"]).unlink()
+    environment["CHECK_TEST_FAIL_MATCH"] = "-m pytest -q tests/test_check.py"
+    failed = _run(root, environment, "all")
+    failed_calls = Path(environment["CHECK_TEST_LOG"]).read_text()
+
+    assert (
+        uncached.returncode == 0
+        and "-o junit_family=xunit1 tests" in calls
+        and "select --reuse" not in calls
+        and "reuse begin --lane full" in calls
+        and failed.returncode == 23
+        and "reuse finish --exit 23" in failed_calls
+        and "--outcome failed" in failed_calls
+        and "CHECK ALL PASS" not in failed.stdout
+    ), f"UNCACHED GATE REUSED TESTS OR A FAILED REUSE LANE PASSED: {uncached.stderr}{failed.stderr}"
+
+
+def test_report_runs_every_lane_names_each_failure_and_stores_no_receipt(
+    check_repo: tuple[Path, dict[str, str]],
+) -> None:
+    root, environment = check_repo
+    environment["CHECK_TEST_FAIL_MATCH"] = "ruff format --check"
+    environment["CHECK_POLICY_FAIL_CODE"] = "41"
+
+    result = _run(root, environment, "report")
+
+    calls = Path(environment["CHECK_TEST_LOG"]).read_text()
+    assert (
+        result.returncode == 1
+        and "CHECK REPORT FAILED: format policy-catalogs policy-test-time" in result.stderr
+        and "test_runner.py" in calls
+        and "governance cwd=" in calls
+        and not any(line.startswith("receipt ") for line in calls.splitlines())
+        and "CHECK policy PASS" not in result.stdout
+        and "CHECK ALL PASS" not in result.stdout
+    ), f"REPORT STOPPED EARLY, HID A FAILED LANE OR STORED A RECEIPT: {result.stderr}"
 
 
 def test_authoritative_runtime_probe_failure_stops_before_gate_without_fallback(

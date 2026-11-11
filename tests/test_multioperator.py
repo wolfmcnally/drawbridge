@@ -1318,3 +1318,302 @@ def test_retrofit_rehearsal_preserves_narrative_history(tmp_path: Path) -> None:
         )
     observed.append(snapshot(source) == dirty)
     assert all(observed), "RETROFIT HISTORY OR REFUSAL CONTRACT LOST: " + repr(observed)
+
+
+def test_absent_retained_evidence_is_reported_while_altered_evidence_refuses(
+    tmp_path: Path,
+) -> None:
+    """Admission: a clean clone could not pass the gate, yet tampering must still refuse.
+
+    A hand-built historical completion gives validation real retained bytes to re-verify.
+    The oracle is the validator's own exit status and reported list for three states of
+    the same file: intact, altered and absent.
+    """
+    from structured_fixtures import create_records
+
+    def sha(data: bytes) -> str:
+        return hashlib.sha256(data).hexdigest()
+
+    root = tmp_path / "held"
+    root.mkdir()
+    (root / "AGENTS.md").write_text("# Synthetic constitution\n")
+    (root / "EXECUTION_LOG.jsonl").write_bytes(b"")
+    name = "kept-work-package"
+    opened = create_records(root, {name: {"state": "in-progress"}})[name]
+    retained = root / ".kickoff/runs/fixture/gates.jsonl"
+    retained.parent.mkdir(parents=True)
+    retained.write_text("{}\n")
+    retained_name = retained.relative_to(root).as_posix()
+    body = (
+        "## 2026-01-01 00:00 — END " + name + "\n\nSynthetic historical close.\n\n"
+        "Lessons:\n- none\n"
+    ).encode()
+    bound = {
+        "phase": name,
+        "outcome": "accepted",
+        "phase_custody": {
+            "id": opened["id"],
+            "owner": opened["owner"],
+            "claim": opened["claim"],
+        },
+        "qualification": {
+            "schema": "agentic.phase-qualification.v1",
+            "files": {retained_name: sha(retained.read_bytes())},
+            "budget_prefix": None,
+            "execution_prefix": {"path": "EXECUTION_LOG.jsonl", "bytes": 0, "sha256": sha(b"")},
+        },
+        "log_sha256": sha(body),
+    }
+    closure_id = sha(json.dumps(bound, sort_keys=True, separators=(",", ":")).encode())
+    closure = retained.parent / "closure.json"
+    closure.write_text(json.dumps({**bound, "closure_id": closure_id, "status": "complete"}))
+    log_id = uuid.uuid5(uuid.NAMESPACE_URL, "log:" + opened["owner"] + ":" + closure_id).hex
+    envelope = {
+        "at": "2026-01-01T00:00:00+00:00",
+        "body_sha256": sha(body),
+        "id": log_id,
+        "previous": None,
+        "sequence": 1,
+        "writer": opened["owner"],
+    }
+    (root / "log/entries" / (log_id + ".md")).write_bytes(
+        b"---\n" + json.dumps(envelope).encode() + b"\n---\n" + body
+    )
+    completed = {
+        **opened,
+        "id": uuid.uuid4().hex,
+        "previous": opened["id"],
+        "from": "in-progress",
+        "state": "completed",
+        "reason": "Synthetic historical completion",
+        "acceptance": {
+            "path": closure.relative_to(root).as_posix(),
+            "sha256": sha(closure.read_bytes()),
+        },
+    }
+    write_json(root / "plan/events" / (completed["id"] + ".json"), completed)
+
+    intact = run("validate", "--root", root)
+    assert intact.returncode == 0, "VALID RETAINED EVIDENCE REFUSED: " + intact.stderr
+    original = retained.read_bytes()
+    retained.write_text("altered\n")
+    altered = run("validate", "--root", root)
+    retained.write_bytes(original)
+    retained.unlink()
+    absent = run("validate", "--root", root)
+    shutil.rmtree(root / ".kickoff")
+    cloned = run("validate", "--root", root)
+    assert (
+        json.loads(intact.stdout)["evidence_not_held"] == []
+        and altered.returncode == 2
+        and "missing or mutated" in altered.stderr
+        and absent.returncode == 0
+        and json.loads(absent.stdout)["evidence_not_held"] == [retained_name]
+        and "EVIDENCE NOT HELD 1" in absent.stderr
+        and cloned.returncode == 0
+        and json.loads(cloned.stdout)["evidence_not_held"] == [completed["acceptance"]["path"]]
+    ), (
+        "RETAINED EVIDENCE ABSENCE REFUSED OR ALTERATION PASSED: "
+        + altered.stderr
+        + absent.stderr
+        + cloned.stderr
+    )
+
+
+def test_methodology_close_cannot_bypass_the_lessons_contract(tmp_path: Path) -> None:
+    """Admission: closes written under a bare methodology heading carried no Lessons.
+
+    The append boundary is exercised directly: a scope record and a composed terminal
+    record are admitted, while a close under any non-terminal methodology heading refuses
+    and leaves the log bytes unchanged.
+    """
+    from structured_fixtures import create_records
+
+    root = tmp_path / "records"
+    root.mkdir()
+    (root / "AGENTS.md").write_text("# Synthetic constitution\n")
+    create_records(root, {"open-work-package": {"state": "next"}})
+    body = tmp_path / "body.md"
+
+    def append(heading: str, tail: str = "Body.\n") -> subprocess.CompletedProcess[str]:
+        body.write_text(f"## 2026-11-10 01:00 — {heading}\n\n{tail}")
+        return run(
+            "append", "--root", root, "--writer", "operator-a", "--body", body,
+            "--at", "2026-11-10T01:00:00Z",
+        )  # fmt: skip
+
+    scope = append("METHODOLOGY SCOPE")
+    before = snapshot(root / "log/entries")
+    bypasses = [append("METHODOLOGY"), append("METHODOLOGY CLOSE gate work")]
+    unchanged = snapshot(root / "log/entries") == before
+    terminal = append("END — METHODOLOGY gate work", "Done.\n\nLessons:\n- none\n")
+    assert (
+        scope.returncode == 0
+        and all(item.returncode == 2 and "append-terminal" in item.stderr for item in bypasses)
+        and unchanged
+        and terminal.returncode == 0
+    ), "METHODOLOGY CLOSE BYPASSED LESSONS OR VALID RECORD REFUSED: " + "".join(
+        item.stderr for item in (scope, *bypasses, terminal)
+    )
+
+
+def test_preflight_lists_source_releases_the_recipient_has_not_recorded(tmp_path: Path) -> None:
+    """Admission: no recipient could say which source release it held.
+
+    Real preflight runs compare a recorded baseline with the source's declared releases;
+    an absent record claims nothing, and a malformed one refuses instead of hiding a gap.
+    """
+    from structured_fixtures import create_records
+
+    roots = []
+    for name in ("source", "recipient"):
+        root = tmp_path / name
+        root.mkdir()
+        (root / "AGENTS.md").write_text("# Synthetic constitution\n")
+        create_records(root, {})
+        roots.append(root)
+    source, recipient = roots
+    (source / "RELEASES.md").write_text(
+        "# Releases\n\n## 1.1.0 — 2026-11-10\n\n## 1.0.2 — 2026-11-10\n\n## 1.0.1 — 2026-11-10\n"
+    )
+    record = recipient / "collaboration/methodology-provenance.json"
+
+    def preflight() -> subprocess.CompletedProcess[str]:
+        return run(
+            "transfer-preflight", "--entry", "teach", "--donor", source, "--recipient", recipient
+        )  # fmt: skip
+
+    unrecorded = preflight()
+    write_json(
+        record,
+        {
+            "schema": "agentic.methodology-provenance.v1",
+            "source": "synthetic-source",
+            "release": "1.0.2",
+            "revision": "a" * 40,
+            "recorded": "2026-11-10",
+            "capabilities": ["gate-report-mode"],
+        },
+    )
+    recorded = preflight()
+    record.write_text('{"release": "1.1.0"}')
+    malformed = preflight()
+    assert (
+        unrecorded.returncode == 0
+        and json.loads(unrecorded.stdout)["recipient_provenance"] is None
+        and json.loads(unrecorded.stdout)["releases_not_recorded"] == ["1.0.1", "1.0.2", "1.1.0"]
+        and recorded.returncode == 0
+        and json.loads(recorded.stdout)["releases_not_recorded"] == ["1.1.0"]
+        and malformed.returncode == 2
+        and "provenance" in malformed.stderr
+    ), "RELEASE GAP MISREPORTED OR MALFORMED PROVENANCE ACCEPTED: " + "".join(
+        item.stderr for item in (unrecorded, recorded, malformed)
+    )
+
+
+def _git(root: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", *args],
+        cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()  # fmt: skip
+
+
+def test_adoption_is_the_only_manifest_change_after_cutover(tmp_path: Path) -> None:
+    """Admission: a cutover committed undeclared could never record its owner's adoption.
+
+    The real commands run against a committed conversion: the declaration refuses while
+    the plan index still carries the rehearsal banner, then becomes the one manifest
+    change the staged validator admits; any other field change still refuses.
+    """
+    from structured_fixtures import create_records
+
+    root = tmp_path / "records"
+    (root / "collaboration").mkdir(parents=True)
+    (root / "AGENTS.md").write_text("# Synthetic constitution\n")
+    manifest = root / "collaboration/manifest.json"
+    write_json(
+        manifest,
+        {
+            "format": "starter.multioperator.v1",
+            "adopted": False,
+            "original_log_bytes": 0,
+            "original_log_sha256": hashlib.sha256(b"").hexdigest(),
+        },
+    )
+    create_records(root, {"open-work-package": {"state": "next"}})
+    index = root / "plan/INDEX.md"
+    index.write_text("# Proposed plan discovery — REHEARSAL ONLY\n\nContext.\n")
+    _git(root, "init", "-q", "-b", "master")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "cutover")
+
+    unreviewed = run("adopt", "--root", root)
+    index.write_text("# Plan discovery\n\nContext.\n")
+    declared = run("adopt", "--root", root)
+    _git(root, "add", "collaboration/manifest.json")
+    admitted = run("validate", "--root", root, "--staged")
+    adopted = manifest.read_bytes()
+    manifest.write_bytes(adopted.replace(b'"original_log_bytes": 0', b'"original_log_bytes": 1'))
+    _git(root, "add", "collaboration/manifest.json")
+    widened = run("validate", "--root", root, "--staged")
+    manifest.write_bytes(adopted)
+    _git(root, "add", "collaboration/manifest.json")
+    _git(root, "commit", "-q", "-m", "adopt")
+    repeated = run("adopt", "--root", root)
+    assert (
+        unreviewed.returncode == 2
+        and "rehearsal banner" in unreviewed.stderr
+        and declared.returncode == 0
+        and json.loads(adopted)["adopted"] is True
+        and admitted.returncode == 0
+        and widened.returncode == 2
+        and "immutable record rewrite" in widened.stderr
+        and repeated.returncode == 2
+        and "already declared" in repeated.stderr
+    ), "ADOPTION DECLARATION REFUSED OR WIDENED: " + "".join(
+        item.stderr for item in (unreviewed, declared, admitted, widened, repeated)
+    )
+
+
+def test_transfer_ancestry_names_the_nearest_revision_and_recipient_lines(tmp_path: Path) -> None:
+    """Admission: merging against one assumed base silently dropped content a recipient never had.
+
+    A recipient that took an early donor revision and added a line of its own must be
+    reported against that early revision, with its own line named, so later donor
+    additions merge in instead of reading as recipient deletions.
+    """
+    donor, recipient = tmp_path / "donor", tmp_path / "recipient"
+    revisions = {}
+    donor.mkdir()
+    _git(donor, "init", "-q", "-b", "master")
+    for name, tracked, behind in (
+        ("early", "a\nb\nc\n", "x\n"),
+        ("middle", "a\nb2\nc\nd\n", "x\ny\n"),
+        ("late", "a\nb3\nc\nd\ne\n", "x\ny\nz\n"),
+    ):
+        (donor / "tracked.txt").write_text(tracked)
+        (donor / "behind.txt").write_text(behind)
+        (donor / "same.txt").write_text("unchanged\n")
+        _git(donor, "add", ".")
+        _git(donor, "commit", "-q", "-m", name)
+        revisions[name] = _git(donor, "rev-parse", "HEAD")
+    recipient.mkdir()
+    _git(recipient, "init", "-q", "-b", "master")
+    (recipient / "tracked.txt").write_text("a\nb\nmine\nc\n")
+    (recipient / "behind.txt").write_text("x\ny\n")
+    (recipient / "same.txt").write_text("unchanged\n")
+    _git(recipient, "add", ".")
+    _git(recipient, "commit", "-q", "-m", "recipient")
+
+    report = run("transfer-ancestry", "--donor", donor, "--recipient", recipient)
+    result(report)
+    files = {item["path"]: item for item in json.loads(report.stdout)["files"]}
+    assert (
+        set(files) == {"tracked.txt", "behind.txt"}
+        and files["tracked.txt"]["ancestor"] == revisions["early"]
+        and files["tracked.txt"]["recipient_own_lines"] == ["mine"]
+        and files["tracked.txt"]["state"] == "edited"
+        and files["behind.txt"]["state"] == "behind"
+        and files["behind.txt"]["ancestor"] == revisions["middle"]
+        and files["behind.txt"]["recipient_own_lines"] == []
+    ), "TRANSFER ANCESTRY MISREAD THE RECIPIENT: " + report.stdout
