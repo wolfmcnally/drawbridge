@@ -1,9 +1,9 @@
 {
   "schema": "agentic.methodology-provenance.v1",
   "source": "agentic-coding-starter",
-  "release": "1.5.1",
-  "revision": "71bc2df00f615b5fe5ebf3e079347f39302db0aa",
-  "recorded": "2026-11-11",
+  "release": "1.6.0",
+  "revision": "4a5c5e3ba07f84dd27e423d7744a038847e7d316",
+  "recorded": "2026-11-12",
   "capabilities": [
     "Mini-method delivery within existing authority",
     "Runtime-state sync exclusion",
@@ -30,6 +30,7 @@
     "Generous clocks for stand-ins that answer",
     "Script environments in a named cache",
     "Admission count in validation",
-    "Batch transfers and ancestry limits"
+    "Batch transfers and ancestry limits",
+    "Owner-directed review outside the watcher"
   ]
 }
