@@ -10,14 +10,66 @@ import pytest
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+def isolate_fixture_git_signing(environment: dict[str, str]) -> None:
+    """Fixture repositories never sign: the operator's signing setup is not under test.
+
+    A machine that signs every commit hands that setting to each throwaway repository a
+    test creates, and a signing agent asked to sign many commits at once refuses some of
+    them. Git reads these variables after every configuration file, so the override holds
+    whatever the machine configures. Entries a caller already supplied are kept, and a
+    nested test run that inherits these does not add them twice.
+    """
+    count = int(environment.get("GIT_CONFIG_COUNT", "0") or "0")
+    supplied = {environment.get(f"GIT_CONFIG_KEY_{index}") for index in range(count)}
+    for key in ("commit.gpgsign", "tag.gpgsign"):
+        if key in supplied:
+            continue
+        environment[f"GIT_CONFIG_KEY_{count}"] = key
+        environment[f"GIT_CONFIG_VALUE_{count}"] = "false"
+        count += 1
+    environment["GIT_CONFIG_COUNT"] = str(count)
+
+
+isolate_fixture_git_signing(os.environ)
+
+
+REPOSITORY = Path(__file__).resolve().parents[1]
+PREPARE_SCRIPTS = "drawbridge_prepare_scripts"
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_configure_node(node):
+    """Only a top-level run's workers prepare; a run nested inside a worker builds lazily.
+
+    A test that launches its own parallel run starts inside a worker, whose environment
+    names that worker. Its workers would otherwise rebuild every script environment.
+    """
+    node.workerinput[PREPARE_SCRIPTS] = "PYTEST_XDIST_WORKER" not in os.environ
+
+
 def pytest_configure(config):
-    """Standalone uv script environments must not be rebuilt by another worker."""
+    """Standalone uv script environments must not be rebuilt by another worker.
+
+    Each worker of a private run has its own cache, which the supervisor's build never
+    reaches, so the worker builds its script environments there before any test runs
+    tools together. A serial run has no workers and prepares nothing.
+    """
     private_root = os.environ.get("DRAWBRIDGE_TEST_UV_CACHE_ROOT")
     if private_root:
-        worker = getattr(config, "workerinput", {}).get("workerid", "master")
+        workerinput = getattr(config, "workerinput", {})
+        worker = workerinput.get("workerid", "master")
         cache = Path(private_root) / worker
         cache.mkdir(parents=True, exist_ok=True)
         os.environ["UV_CACHE_DIR"] = str(cache)
+        if workerinput.get(PREPARE_SCRIPTS):
+            import importlib.util
+
+            runner = REPOSITORY / "lib" / "agentic_starter" / "test_runner.py"
+            spec = importlib.util.spec_from_file_location("drawbridge_test_runner", runner)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            arguments = ["-n", str(workerinput["workercount"])]
+            module.prepare_script_environments(REPOSITORY, arguments, os.environ)
 
 
 MINIMAL_ZERO_PAGE_PDF = b"""%PDF-1.4

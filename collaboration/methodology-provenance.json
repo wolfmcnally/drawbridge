@@ -1,8 +1,8 @@
 {
   "schema": "agentic.methodology-provenance.v1",
   "source": "agentic-coding-starter",
-  "release": "1.5.0",
-  "revision": "63c689151268336fbbc9a69bb8cb0aaf0bea2379",
+  "release": "1.5.1",
+  "revision": "71bc2df00f615b5fe5ebf3e079347f39302db0aa",
   "recorded": "2026-11-11",
   "capabilities": [
     "Mini-method delivery within existing authority",
@@ -25,6 +25,11 @@
     "Shared-defect limits",
     "Recorded defects for inherited proofs",
     "Never-launched attempts and the registrar's relaunch rule",
-    "Script environments built before parallel workers"
+    "Script environments built before parallel workers",
+    "Fixture repositories that never sign",
+    "Generous clocks for stand-ins that answer",
+    "Script environments in a named cache",
+    "Admission count in validation",
+    "Batch transfers and ancestry limits"
   ]
 }
