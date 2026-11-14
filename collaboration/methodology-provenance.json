@@ -1,9 +1,9 @@
 {
   "schema": "agentic.methodology-provenance.v1",
   "source": "agentic-coding-starter",
-  "release": "1.6.0",
-  "revision": "4a5c5e3ba07f84dd27e423d7744a038847e7d316",
-  "recorded": "2026-11-12",
+  "release": "1.7.0",
+  "revision": "37edf41ea22ce383a81102ab7819c1b998cae5f1",
+  "recorded": "2026-11-14",
   "capabilities": [
     "Mini-method delivery within existing authority",
     "Runtime-state sync exclusion",
@@ -31,6 +31,13 @@
     "Script environments in a named cache",
     "Admission count in validation",
     "Batch transfers and ancestry limits",
-    "Owner-directed review outside the watcher"
+    "Owner-directed review outside the watcher",
+    "Native suite as a second supervised lane",
+    "Catch-up admission with retirements",
+    "Converter report and reference handling",
+    "Relative paths and the undeclared-cutover refusal",
+    "Corrected timeout proof",
+    "Transfer skill guidance",
+    "README and manual open with the problem"
   ]
 }
