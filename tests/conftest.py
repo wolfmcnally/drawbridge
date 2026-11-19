@@ -92,12 +92,25 @@ def _ocr_tools_present() -> bool:
 
 
 def pytest_collection_modifyitems(config, items):
-    if _ocr_tools_present():
-        return
-    skip = pytest.mark.skip(reason="ocrmypdf and tesseract are required for live OCR tests")
-    for item in items:
-        if "live" in item.keywords:
-            item.add_marker(skip)
+    if not _ocr_tools_present():
+        skip = pytest.mark.skip(reason="ocrmypdf and tesseract are required for live OCR tests")
+        for item in items:
+            if "live" in item.keywords:
+                item.add_marker(skip)
+
+    requires_vellric = [
+        item for item in items if item.get_closest_marker("requires_vellric") is not None
+    ]
+    if requires_vellric:
+        from drawbridge._vellric import executable
+        from drawbridge.errors import ConverterUnavailable
+
+        try:
+            executable()
+        except ConverterUnavailable:
+            skip = pytest.mark.skip(reason="requires an independently installed Vellric")
+            for item in requires_vellric:
+                item.add_marker(skip)
 
 
 @pytest.fixture

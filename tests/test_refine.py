@@ -156,3 +156,41 @@ def test_refinement_reports_each_reviewed_window(fidelity):
     total = len(seen)
     assert total >= 1
     assert heard == [("refinement", done, total) for done in range(total + 1)]
+
+
+def test_queued_refinement_windows_all_complete(fidelity, monkeypatch):
+    import io
+    import time
+    from contextlib import contextmanager
+    from dataclasses import replace
+    from threading import Barrier
+
+    from drawbridge import refine
+
+    monkeypatch.setattr(refine, "windows", lambda turns: [[turn] for turn in turns])
+    profile = parse_profile(PROFILE)
+    endpoint = replace(profile.endpoints["router"], max_concurrency=1, timeout_seconds=0.03)
+    profile = replace(profile, endpoints={"router": endpoint})
+    calls = []
+    ready = Barrier(4, timeout=5)
+    original_slot = type(endpoint).call_slot
+
+    @contextmanager
+    def start_together(selected):
+        ready.wait()
+        with original_slot(selected):
+            yield
+
+    monkeypatch.setattr(type(endpoint), "call_slot", start_together)
+    monkeypatch.setenv("DB_TEST_ROUTER", "synthetic")
+
+    def fake_open(request, *, timeout):
+        calls.append(request.data)
+        # The fake transport simulates a busy slot for longer than the former queue deadline.
+        time.sleep(timeout * 2)
+        return io.BytesIO(b'{"choices":[{"message":{"content":"{}"}}]}')
+
+    monkeypatch.setattr("drawbridge.calls.urllib.request.urlopen", fake_open)
+    result = run_refinement(fidelity, profile=profile, plan=build_plan(profile, "audio/mpeg"))
+    assert len(calls) == 4
+    assert "refinement-incomplete" not in result.header["verify"]

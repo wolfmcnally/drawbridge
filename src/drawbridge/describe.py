@@ -14,7 +14,7 @@ import urllib.error
 from pathlib import Path
 from typing import Any, Callable
 
-from .calls import chat_completion
+from .calls import call_converse, chat_completion, endpoint_cache_scope
 from .errors import ConversionOperationalError, DrawbridgeError
 from .profile import Endpoint, Plan, Profile, ProfileError
 from .structure import Cache
@@ -36,10 +36,12 @@ class DescriptionError(ConversionOperationalError):
 
 
 def openai_compatible_describer(endpoint: Endpoint, model: str, prompt: str) -> Describer:
-    if not endpoint.base_url:
+    if endpoint.bedrock is None and not endpoint.base_url:
         raise ProfileError(f"endpoint {endpoint.name} needs a base_url")
 
     def describe(jpeg: bytes) -> str:
+        if endpoint.bedrock is not None:
+            return call_converse(endpoint, model, prompt, stage=STAGE, jpeg=jpeg)
         image = {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(jpeg).decode("ascii")}}
         payload = {"temperature": 0, "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}, image]}]}
         try:
@@ -74,10 +76,22 @@ def describe_image(path: Path, content_hash: str, *, profile: Profile, plan: Pla
     chosen = stage.get("prompt", "default")
     prompt = (PROMPT if chosen == "default" else str(chosen)).replace("{max_words}", str(max_words))
     describe = describe or openai_compatible_describer(endpoint, model, prompt)
-    ask = lambda: {"text": describe(image_jpeg(path))}  # noqa: E731
+    def ask() -> dict[str, str]:
+        if endpoint.bedrock is None:
+            jpeg = image_jpeg(path)
+        else:
+            jpeg = image_jpeg(
+                path, max_side=endpoint.bedrock.max_image_side_px,
+                max_bytes=endpoint.bedrock.max_image_bytes,
+            )
+        return {"text": describe(jpeg)}
+
     try:
-        if stage.get("cache", True):
-            answer = Cache(profile.limits.cache_dir).fetch(ask, content_hash, STAGE, model, hashlib.sha256(prompt.encode()).hexdigest())
+        if stage.get("cache", True) and profile.limits.cache_dir is not None:
+            answer = Cache(profile.limits.cache_dir).fetch(
+                ask, content_hash, STAGE, model, hashlib.sha256(prompt.encode()).hexdigest(),
+                *endpoint_cache_scope(endpoint),
+            )
         else:
             answer = ask()
         text = tidy(str(answer.get("text", "")), max_words)

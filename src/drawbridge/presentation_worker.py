@@ -20,7 +20,6 @@ import socket
 import stat
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -133,6 +132,23 @@ def _rss(pid: int) -> int:
     return usage.resident
 
 
+def _worker_environment(work: Path) -> dict[str, str]:
+    from .configuration import child_environment, current_configuration
+
+    environment = child_environment(work, locale="C.UTF-8")
+    if current_configuration().paths.path is None:
+        environment["PATH"] = "/usr/bin:/bin"
+    # Optional numerical runtimes may start threads during import.
+    environment.update(
+        OPENBLAS_NUM_THREADS="1",
+        OMP_NUM_THREADS="1",
+        MKL_NUM_THREADS="1",
+        NUMEXPR_NUM_THREADS="1",
+        VECLIB_MAXIMUM_THREADS="1",
+    )
+    return environment
+
+
 def _stop(process: subprocess.Popen) -> None:
     # This worker has no child supervisor or protocol cleanup to await.
     if process.poll() is not None:
@@ -177,7 +193,9 @@ def run_presentation(source: Path, include_notes: bool) -> tuple[dict, str, int]
     system = platform.system()
     if system not in {"Darwin", "Linux"}:
         raise PresentationUnavailable("presentation containment is unavailable on this platform")
-    with tempfile.TemporaryDirectory(prefix="drawbridge-pptx-") as directory:
+    from .configuration import temporary_directory
+
+    with temporary_directory("drawbridge-pptx-") as directory:
         work = Path(directory).resolve()
         snapshot = work / "source.pptx"
         snapshot.write_bytes(blob)
@@ -197,16 +215,7 @@ def run_presentation(source: Path, include_notes: bool) -> tuple[dict, str, int]
             profile = work / "parser.sb"
             profile.write_text(_mac_profile(work))
             argv = ["/usr/bin/sandbox-exec", "-f", str(profile), *argv]
-        environment = {
-            "HOME": str(work),
-            "TMPDIR": str(work),
-            "PATH": "/usr/bin:/bin",
-            "LANG": "C.UTF-8",
-            "LC_ALL": "C.UTF-8",
-            "OMP_THREAD_LIMIT": "1",
-            "PYTHONDONTWRITEBYTECODE": "1",
-            "PYTHONNOUSERSITE": "1",
-        }
+        environment = _worker_environment(work)
         try:
             process = subprocess.Popen(
                 argv,

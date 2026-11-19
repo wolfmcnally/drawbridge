@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import Any, Callable
 
-from .calls import chat_completion
+from .calls import call_converse, chat_completion, endpoint_cache_scope
 from .errors import ConversionOperationalError
 from .mirror import Mirror, now_iso, parse_mirror_header
 from .profile import Endpoint, Plan, Profile, ProfileError
@@ -153,13 +153,15 @@ def proposals(answer: dict[str, Any], turns: dict[int, Turn], *, speaker_resolut
 
 
 def openai_compatible_reviewer(endpoint: Endpoint, model: str, prompt: str = PROMPT) -> Reviewer:
-    if not endpoint.base_url:
+    if endpoint.bedrock is None and not endpoint.base_url:
         raise ProfileError(f"endpoint {endpoint.name} needs a base_url")
 
     def review(window: str) -> dict[str, Any]:
         payload = {"temperature": 0, "response_format": {"type": "json_object"},
                    "messages": [{"role": "system", "content": prompt}, {"role": "user", "content": window}]}
         try:
+            if endpoint.bedrock is not None:
+                return json_object(call_converse(endpoint, model, window, stage=STAGE, system=prompt))
             return json_object(chat_completion(endpoint, model, payload, stage=STAGE)["choices"][0]["message"]["content"])
         except (urllib.error.URLError, TimeoutError, KeyError, IndexError, TypeError, ValueError) as exc:
             raise ConversionOperationalError(f"endpoint {endpoint.name} gave no usable answer") from exc
@@ -266,7 +268,10 @@ def run_refinement(fidelity_text: str, *, profile: Profile, plan: Plan, review: 
         raise ProfileError(f"{STAGE}: speaker_resolution must be propose or off; identities are never asserted")
     model = str(stage.get("model", ""))
     review = review or openai_compatible_reviewer(endpoint, model)
-    if stage.get("cache", True):
+    if stage.get("cache", True) and profile.limits.cache_dir is not None:
         cache, inner = Cache(profile.limits.cache_dir), review
-        review = lambda window: cache.fetch(lambda: inner(window), STAGE, model, hashlib.sha256(PROMPT.encode()).hexdigest(), window)  # noqa: E731
+        scope = (STAGE, model, hashlib.sha256(PROMPT.encode()).hexdigest(), *endpoint_cache_scope(endpoint))
+
+        def review(window: str) -> dict[str, Any]:
+            return cache.fetch(lambda: inner(window), *scope, window)
     return refined_mirror(fidelity_text, review, method=f"{STAGE}:annotate:{model}", endpoint=endpoint, speaker_resolution=resolution == "propose")

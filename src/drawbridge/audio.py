@@ -14,10 +14,10 @@ by editing the package's speaker table and rendering the body again.
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 import threading
 import time
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -60,12 +60,14 @@ class RunBudget:
 
 def audio_minutes(path: Path) -> float:
     """Duration from the container, read locally. A file whose length cannot be read is refused."""
-    executable = shutil.which("ffprobe")
+    from .configuration import executable_path, run_local_tool
+
+    executable = executable_path("ffprobe")
     if executable is None:
         raise ConverterUnavailable("ffprobe is required to measure a recording before transcribing it")
     try:
-        result = subprocess.run(
-            [executable, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
+        result = run_local_tool(
+            [executable, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path.absolute())],
             capture_output=True, text=True, check=True, timeout=60,
         )
         return float(result.stdout.strip()) / 60.0
@@ -146,7 +148,17 @@ def _dependency_options(profile: Profile, package_dir: Path, decision: AudioDeci
     options = ["--output-dir", str(package_dir), "--leveling", decision.leveling_mode,
                "--second-pass", decision.second_pass_mode, "--uneven-threshold", str(decision.threshold_db)]
     if cleanup.get("preset"):
-        options += ["--auphonic-config", str(Path(str(cleanup["preset"])).expanduser())]
+        from .configuration import current_configuration
+
+        configuration = current_configuration()
+        preset = Path(str(cleanup["preset"]))
+        if configuration.files:
+            if str(preset).startswith("~"):
+                raise ProfileError("explicit audio preset paths cannot use home expansion")
+            preset = (configuration.root or configuration.files[0].parent) / preset
+        else:
+            preset = preset.expanduser()
+        options += ["--auphonic-config", str(preset)]
     for key, value in (cleanup.get("settings") or {}).items():
         options += ["--auphonic-set", f"{key}={json.dumps(materialize_settings(value))}"]
     if cleanup.get("bitrate_kbps"):
@@ -290,10 +302,14 @@ def convert_audio(
         seconds = round(minutes * 60)
         advance("transcription", 0, seconds)  # the dependency transcribes the recording as a whole
         try:
-            credentials = {_DEPENDENCY_KEYS[stage]: profile.endpoint_for(stage).key()
-                           for stage in decision.cloud_stages}
-            package = (run or dependency.transcribe_file)(
-                path, *_dependency_options(profile, package_dir, decision), **credentials)
+            endpoints = {stage: profile.endpoint_for(stage) for stage in decision.cloud_stages}
+            providers = {endpoint.name: endpoint for endpoint in endpoints.values()}
+            with ExitStack() as slots:
+                for name in sorted(providers):
+                    slots.enter_context(providers[name].call_slot())
+                credentials = {_DEPENDENCY_KEYS[stage]: endpoint.key() for stage, endpoint in endpoints.items()}
+                package = (run or dependency.transcribe_file)(
+                    path, *_dependency_options(profile, package_dir, decision), **credentials)
         except RuntimeError as exc:  # provider, leveling and packaging errors all derive from RuntimeError
             endpoint = profile.endpoint_for("transcription")
             report(ModelCall("transcription", endpoint.name if endpoint else None, None, "failed",

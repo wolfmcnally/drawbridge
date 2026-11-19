@@ -19,7 +19,15 @@ import tempfile
 from pathlib import Path
 
 from . import __version__
-from .configuration import Configuration, configuration_context, load_configuration
+from .configuration import (
+    Configuration,
+    configuration_context,
+    current_configuration,
+    executable_path,
+    load_configuration,
+    stage_selection,
+    temporary_directory,
+)
 from .convert import ConversionOptions
 from .documents import convert_file, plan_report
 from .errors import (
@@ -73,12 +81,17 @@ def _exit_code_for(exc: DrawbridgeError) -> int:
     return EXIT_OPERATIONAL
 
 
+def _config_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--config", type=Path, action="append", default=[], help="explicit composed configuration file (repeat in merge order)")
+    parser.add_argument("--config-root", type=Path, default=None, help="confine explicit configuration files and includes to this directory")
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="drawbridge", description="Any file in, one provenance-headed Markdown mirror out.")
     parser.add_argument("--version", action="version", version=f"drawbridge {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    convert = sub.add_parser("convert", help="convert one file of any supported type to a provenance-headed Markdown mirror")
+    convert = sub.add_parser("convert", argument_default=argparse.SUPPRESS, help="convert one file of any supported type to a provenance-headed Markdown mirror")
     convert.add_argument("pdf", metavar="file", type=Path)
     convert.add_argument("-o", "--out", type=Path, help="output path (default: <input name>.md beside the input)")
     convert.add_argument("--stdout", action="store_true", help="write the mirror to standard output instead of a file")
@@ -91,40 +104,49 @@ def _build_parser() -> argparse.ArgumentParser:
     convert.add_argument("--searchable-pdf", type=Path, help="keep the ocrmypdf derivative here (implies preflight)")
     convert.add_argument("--tessdata-dir", type=Path, help="explicit trusted Tesseract language-data directory")
     convert.add_argument("--lang", help="Tesseract language code(s), e.g. eng or eng+deu")
-    convert.add_argument("--dpi", type=int, default=300, help="render resolution for recognition (default 300)")
-    convert.add_argument("--workers", type=int, default=1, help="documents you intend to process concurrently; bounds per-document OCR jobs")
-    convert.add_argument("--raster-threshold", type=float, default=0.5, help="image coverage at which a page counts as a scan (default 0.5)")
+    convert.add_argument("--dpi", type=int, help="render resolution for recognition (default 300)")
+    convert.add_argument("--workers", type=int, help="documents you intend to process concurrently; bounds per-document OCR jobs")
+    convert.add_argument("--ocr-page-workers", type=int, help="maximum OCR pages in flight per document (default 1)")
+    convert.add_argument("--raster-threshold", type=float, help="image coverage at which a page counts as a scan (default 0.5)")
     convert.add_argument("--json", action="store_true", help="print a JSON summary instead of prose")
-    convert.add_argument("--profile", type=Path, help="profile that enables networked and model stages")
-    convert.add_argument("--no-profile", action="store_true", help="ignore every profile; run the local pipeline only")
-    convert.add_argument("--config", type=Path, action="append", default=[], help="explicit composed configuration file (repeat in merge order)")
-    convert.add_argument("--config-root", type=Path, help="confine explicit configuration files and includes to this directory")
+    convert.add_argument("--profile", type=Path, default=None, help="profile that enables networked and model stages")
+    convert.add_argument("--no-profile", action="store_true", default=False, help="ignore every profile; run the local pipeline only")
+    _config_arguments(convert)
     convert.add_argument("--stages", help="comma-separated stages to run; others in the profile are skipped")
     convert.add_argument("--skip", help="comma-separated stages to skip")
     convert.add_argument("--no-ai", action="store_true", help="run no stage that uses an endpoint")
     convert.add_argument("--notes", choices=("include", "exclude"), help="PowerPoint presenter notes policy (overrides profile presentation_notes)")
-    convert.add_argument("--local-only", action="store_true", help="refuse any stage whose endpoint declares egress: cloud")
+    convert.add_argument("--local-only", action="store_true", help="refuse any stage whose endpoint declares cloud or brokered egress")
     convert.add_argument("--dry-run", action="store_true", help="print the resolved plan and exit: no calls, no writes")
     convert.add_argument("--artifacts-dir", type=Path, help="where a transcription package is kept (default: beside the input)")
 
     profile = sub.add_parser("profile", help="show or check the resolved profile; secrets are never printed")
     profile.add_argument("action", choices=["show", "check"])
     profile.add_argument("--profile", type=Path)
+    _config_arguments(profile)
 
     speakers = sub.add_parser("speakers", help="name the speakers of an audio mirror and render it again")
     speakers.add_argument("mirror", type=Path)
     speakers.add_argument("--package", type=Path, help="transcription package (default: the one the mirror names, beside it)")
     speakers.add_argument("assignments", nargs="*", metavar="ID=NAME", help="the same NAME may be given to several identities")
     speakers.add_argument("--clear", action="append", default=[], metavar="ID")
+    _config_arguments(speakers)
 
     inspect = sub.add_parser("inspect", help="report identification and OCR page selection as JSON")
     inspect.add_argument("pdf", type=Path)
-    inspect.add_argument("--page-texts", action="store_true", help="include every page's native text")
-    inspect.add_argument("--raster-threshold", type=float, default=0.5)
+    inspect.add_argument("--page-texts", action="store_true", default=None, help="include every page's native text")
+    inspect.add_argument("--raster-threshold", type=float)
+    _config_arguments(inspect)
 
     verify = sub.add_parser("verify", help="check that a mirror matches its PDF")
     verify.add_argument("mirror", type=Path)
     verify.add_argument("--pdf", "--source", dest="pdf", type=Path, required=True)
+    _config_arguments(verify)
+
+    doctor = sub.add_parser("doctor", help="check the installed local conversion runtime")
+    doctor.add_argument("--require-pdf", action="store_true")
+    doctor.add_argument("--require-image-ocr", action="store_true")
+    _config_arguments(doctor)
     return parser
 
 
@@ -132,7 +154,13 @@ def _cmd_convert(args: argparse.Namespace) -> int:
     try:
         if args.config and (args.profile is not None or args.no_profile):
             raise ProfileError("--config conflicts with --profile and --no-profile")
-        configuration = load_configuration(args.config, root=args.config_root, local_only=args.local_only, no_ai=args.no_ai)
+        configuration = load_configuration(
+            args.config, root=args.config_root, local_only=getattr(args, "local_only", False),
+            no_ai=getattr(args, "no_ai", False),
+        )
+        args = argparse.Namespace(**(configuration.cli_conversion_settings() | vars(args)))
+        args.local_only = configuration.local_only
+        args.no_ai = configuration.no_ai
     except ProfileError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_USAGE
@@ -144,6 +172,9 @@ def _cmd_convert(args: argparse.Namespace) -> int:
 
 
 def _cmd_convert_scoped(args: argparse.Namespace, configuration: Configuration) -> int:
+    if args.ocr_page_workers < 1:
+        print("error: --ocr-page-workers must be positive", file=sys.stderr)
+        return EXIT_USAGE
     if args.searchable_pdf is not None and args.skip_preflight:
         print("error: --searchable-pdf requires the preflight; drop --skip-preflight", file=sys.stderr)
         return EXIT_USAGE
@@ -151,6 +182,7 @@ def _cmd_convert_scoped(args: argparse.Namespace, configuration: Configuration) 
     if not args.no_ocr:
         ocr = CliOcrBackend(
             document_workers=args.workers,
+            page_workers=args.ocr_page_workers,
             preflight=not args.skip_preflight,
             searchable_pdf=args.searchable_pdf,
             dpi=args.dpi,
@@ -167,8 +199,8 @@ def _cmd_convert_scoped(args: argparse.Namespace, configuration: Configuration) 
     try:
         active = configuration.profile if configuration.files else resolve_profile(args.profile, no_profile=args.no_profile)
         media_type, _ = sniff_media_type(args.pdf)
-        split = lambda value: [item.strip() for item in value.split(",") if item.strip()] if value else None  # noqa: E731
-        plan = build_plan(active, media_type, only=split(args.stages), skip=split(args.skip) or (), no_ai=args.no_ai, local_only=args.local_only)
+        plan = build_plan(active, media_type, only=stage_selection(args.stages),
+                          skip=stage_selection(args.skip) or (), no_ai=args.no_ai, local_only=args.local_only)
     except EgressRefused as exc:
         print(json.dumps({"outcome": "refused", "message": str(exc), "plan": exc.plan.as_dict()}) if args.json else f"refused: {exc}", file=sys.stdout if args.json else sys.stderr)
         return EXIT_USAGE
@@ -205,7 +237,9 @@ def _cmd_convert_scoped(args: argparse.Namespace, configuration: Configuration) 
         sys.stdout.write(rendered)
     else:
         # The whole input name is kept, so report.pdf and report.docx cannot collide on report.md.
-        out = args.out or (args.pdf.with_suffix(".md") if result.pdf else args.pdf.with_name(args.pdf.name + ".md"))
+        default = args.pdf.with_suffix(".md") if result.pdf else args.pdf.with_name(args.pdf.name + ".md")
+        target_dir = configuration.paths.output_dir or configuration.paths.work_dir
+        out = args.out or (target_dir / default.name if target_dir is not None else default)
         _atomic_write_text(out, rendered)
     semantic_out: Path | None = None
     if result.semantic is not None and out is not None:
@@ -245,7 +279,10 @@ def _cmd_convert_scoped(args: argparse.Namespace, configuration: Configuration) 
 
 def _cmd_profile(args: argparse.Namespace) -> int:
     try:
-        active = resolve_profile(args.profile)
+        configuration = current_configuration()
+        if args.config and args.profile is not None:
+            raise ProfileError("--config conflicts with --profile")
+        active = configuration.profile if configuration.files else resolve_profile(args.profile)
     except (ProfileError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_USAGE
@@ -270,7 +307,11 @@ def _cmd_speakers(args: argparse.Namespace) -> int:
         return EXIT_OPERATIONAL
     try:
         header, _ = parse_mirror_header(args.mirror)
-        package_dir = args.package or args.mirror.parent / str(header.get("transcription_package", ""))
+        configuration = current_configuration()
+        package_dir = (
+            args.package or configuration.speakers_package
+            or args.mirror.parent / str(header.get("transcription_package", ""))
+        )
         package = transcribe.Package.load(package_dir)
         names: dict[str, str | None] = {}
         for item in args.assignments:
@@ -278,7 +319,7 @@ def _cmd_speakers(args: argparse.Namespace) -> int:
             if not separator or not identity.strip():
                 raise ValueError(f"an assignment must look like ID=NAME: {item!r}")
             names[identity.strip()] = name
-        names.update({identity: None for identity in args.clear})
+        names.update({identity: None for identity in (args.clear or configuration.speakers_clear)})
         if names:
             package.assign(names)
             _atomic_write_text(args.mirror, rerender(args.mirror, package_dir))
@@ -292,16 +333,22 @@ def _cmd_speakers(args: argparse.Namespace) -> int:
 
 def _cmd_inspect(args: argparse.Namespace) -> int:
     ident = identify(args.pdf)
-    data = ident.as_dict(include_page_texts=args.page_texts)
+    page_texts = current_configuration().inspect_page_texts if args.page_texts is None else args.page_texts
+    data = ident.as_dict(include_page_texts=page_texts)
     if ident.processable:
         try:
+            threshold = args.raster_threshold
+            if threshold is None:
+                threshold = current_configuration().cli_conversion_settings()["raster_threshold"]
             data["ocr_pages"] = ocr_page_numbers(
-                args.pdf, raster_threshold=args.raster_threshold, inspection=ident.inspection
+                args.pdf, raster_threshold=threshold, inspection=ident.inspection
             )
         except DrawbridgeError as exc:
             data["ocr_pages"] = None
             data["ocr_selection_error"] = str(exc)
     print(json.dumps(data, indent=2))
+    if ident.code == "dependency-unavailable":
+        return EXIT_OPERATIONAL
     return {"processable": EXIT_OK, "blocked": EXIT_BLOCKED, "failed": EXIT_FAILED}[ident.outcome]
 
 
@@ -356,20 +403,58 @@ def _cmd_verify(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    from ._vellric import _check_doctor, executable
+    from .orientation import tesseract_executable
+
+    configuration = current_configuration()
+    tools = {
+        name: executable_path(name, configuration.file_executable if name == "file" else None)
+        for name in ("file", "tesseract", "ocrmypdf", "gs", "qpdf", "ffmpeg", "ffprobe")
+    }
+    failures = []
+    if tools["file"] is None:
+        failures.append("file unavailable")
+    try:
+        if args.require_image_ocr:
+            tools["tesseract"] = tesseract_executable()
+    except OcrOperationalError:
+        failures.append("tesseract unavailable")
+    try:
+        tools["vellric"] = executable()
+        if args.require_pdf:
+            with temporary_directory("drawbridge-doctor-") as work:
+                _check_doctor(tools["vellric"], Path(work), bool(configuration.files))
+    except ConverterUnavailable:
+        tools.setdefault("vellric", None)
+        if args.require_pdf:
+            failures.append("Vellric unavailable or incompatible")
+    if args.require_pdf and not configuration.cli_conversion_settings()["skip_preflight"]:
+        if tools["ocrmypdf"] is None:
+            failures.append("ocrmypdf unavailable")
+    print(json.dumps({
+        "version": __version__, "locale": "en_US.UTF-8", "python": sys.executable, "tools": tools,
+        "ready": not failures, "failures": failures,
+    }, indent=2))
+    return EXIT_OPERATIONAL if failures else EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     try:
         if args.command == "convert":
             return _cmd_convert(args)
-        if args.command == "inspect":
-            return _cmd_inspect(args)
-        if args.command == "verify":
-            return _cmd_verify(args)
-        if args.command == "profile":
-            return _cmd_profile(args)
-        if args.command == "speakers":
-            return _cmd_speakers(args)
+        commands = {
+            "inspect": _cmd_inspect, "verify": _cmd_verify, "profile": _cmd_profile,
+            "speakers": _cmd_speakers, "doctor": _cmd_doctor,
+        }
+        configuration = load_configuration(args.config, root=args.config_root)
+        with configuration_context(configuration):
+            return commands[args.command](args)
+    except ProfileError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
     except ConverterUnavailable as exc:
         print(f"operational: {exc}", file=sys.stderr)
         return EXIT_OPERATIONAL

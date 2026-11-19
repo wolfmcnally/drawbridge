@@ -112,6 +112,7 @@ class CliOcrBackend:
         document_timeout: float | None = None,
         max_input_bytes: int | None = None,
         max_pages: int | None = None,
+        page_workers: int | None = None,
     ) -> None:
         cores = (
             available_cores if available_cores is not None else (os.cpu_count() or 1)
@@ -119,7 +120,17 @@ class CliOcrBackend:
         if isinstance(cores, bool) or not isinstance(cores, int) or cores <= 0:
             cores = 1
         self.capacity = capacity or OcrCapacity(cores)
-        self.ocr_jobs = min(self.capacity.cores, ocr_jobs_for(document_workers, cores))
+        grant = min(self.capacity.cores, ocr_jobs_for(document_workers, cores))
+        if page_workers is None:
+            from .configuration import current_configuration
+
+            page_workers = current_configuration().convert.get("ocr_page_workers")
+        if page_workers is None:
+            # Preserve deliberate API grants. Ambient CPU count alone is not a raster budget.
+            page_workers = grant if available_cores is not None or capacity is not None else 1
+        if type(page_workers) is not int or page_workers < 1:
+            raise ValueError("OCR page worker count must be a positive integer")
+        self.ocr_jobs = min(grant, page_workers)
         self.preflight = preflight
         self.searchable_pdf = (
             Path(searchable_pdf) if searchable_pdf is not None else None
@@ -138,8 +149,10 @@ class CliOcrBackend:
         self.max_pages = max_pages
 
     def _resource_options(self) -> list[str]:
+        from ._vellric import configured_limit
+
         memory = self.memory_mib
-        if memory is None and "DRAWBRIDGE_VELLRIC_MEMORY_MIB" not in os.environ:
+        if memory is None and configured_limit("MEMORY_MIB") is None:
             memory = 2048 + 512 * (self.ocr_jobs - 1)
         options = []
         for flag, value in [
@@ -202,8 +215,10 @@ class CliOcrBackend:
         if self.tessdata_dir is not None:
             options += ["--tessdata-dir", str(self.tessdata_dir)]
         options += self._resource_options()
+        from ._vellric import configured_limit
+
         deadline = self.document_timeout
-        if deadline is None and "DRAWBRIDGE_VELLRIC_TIMEOUT_SECONDS" not in os.environ:
+        if deadline is None and configured_limit("TIMEOUT_SECONDS") is None:
             page_budget = (
                 len(selected)
                 if selected is not None

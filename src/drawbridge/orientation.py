@@ -16,10 +16,8 @@ from __future__ import annotations
 
 import csv
 import io
-import os
 import shutil
 import subprocess
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -91,7 +89,10 @@ def tsv_text_and_score(raw: str, *, horizontal: bool = False) -> tuple[str, floa
 
 
 def tesseract_executable() -> str:
-    executable = shutil.which("tesseract")
+    from .configuration import current_configuration, executable_path
+
+    config = current_configuration()
+    executable = executable_path("tesseract") if config.files or config.paths.path is not None else shutil.which("tesseract")
     if executable is None:
         raise OcrOperationalError("tesseract unavailable")
     return executable
@@ -170,15 +171,12 @@ def recover_page(
         if not cuts
         else [(0.0, top, width, bottom) for top, bottom in zip(edges, edges[1:])]
     )
-    with tempfile.TemporaryDirectory(prefix="drawbridge-page-") as temp:
-        from ._vellric import _environment
+    from ._vellric import _environment, configured_tessdata
+    from .configuration import temporary_directory
 
+    with temporary_directory("drawbridge-page-") as temp:
         environment = _environment(executable, Path(temp).resolve())
-        data = (
-            tessdata_dir
-            or os.environ.get("DRAWBRIDGE_VELLRIC_TESSDATA_DIR")
-            or os.environ.get("TESSDATA_PREFIX")
-        )
+        data = tessdata_dir or configured_tessdata()
         if data:
             environment["TESSDATA_PREFIX"] = str(Path(data).resolve())
 
@@ -208,6 +206,7 @@ def recover_page(
                     check=True,
                     timeout=timeout,
                     env=environment,
+                    cwd=temp,
                 )
             except subprocess.TimeoutExpired as exc:
                 raise OcrOperationalError(
@@ -221,8 +220,8 @@ def recover_page(
                 target.unlink(missing_ok=True)
             return tsv_text_and_score(result.stdout, horizontal=True)
 
-        candidates = [(angle, *recognise(angle, 0)) for angle in angles]
-        angle, text, score = max(candidates, key=lambda candidate: candidate[2])
+        choices = ((angle, *recognise(angle, 0)) for angle in angles)
+        angle, text, score = max(choices, key=lambda candidate: candidate[2])
         texts = [text]
         for band in range(1, len(clips)):
             band_text, band_score = recognise(angle, band)

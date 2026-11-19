@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from .configuration import current_configuration, executable_path, run_local_tool
 from .errors import (
     ConversionOperationalError,
     ConverterUnavailable,
@@ -81,6 +82,8 @@ class IdentifyResult:
             raise PdfReadOperationalError(
                 message, inspection or PdfInspection(True, None, None, None, None, None)
             )
+        if self.code == "dependency-unavailable":
+            raise ConverterUnavailable(message)
         if self.code == "pdf-open-operational":
             raise PdfOpenOperationalError(message)
         if self.code == "pdf-processing-operational":
@@ -97,10 +100,15 @@ def sniff_media_type(path: Path) -> tuple[str, list[str]]:
     The filename suffix is never consulted.
     """
     flags: list[str] = []
-    if shutil.which("file"):
+    configuration = current_configuration()
+    if configuration.files or configuration.file_executable is not None or configuration.paths.path is not None:
+        executable = executable_path("file", configuration.file_executable)
+    else:
+        executable = shutil.which("file")
+    if executable:
         try:
-            result = subprocess.run(
-                ["file", "--mime-type", "--brief", str(path)],
+            result = run_local_tool(
+                [executable, "--mime-type", "--brief", str(path.absolute())],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -196,7 +204,9 @@ def identify(path: Path | str) -> IdentifyResult:
         return _failed(
             path, media, flags, "pdf-read-operational", str(exc), exc.inspection
         )
-    except (ConverterUnavailable, PdfOpenOperationalError, OSError) as exc:
+    except ConverterUnavailable as exc:
+        return _failed(path, media, flags, "dependency-unavailable", str(exc))
+    except (PdfOpenOperationalError, OSError) as exc:
         return _failed(
             path,
             media,

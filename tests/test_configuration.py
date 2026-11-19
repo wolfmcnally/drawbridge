@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import FrozenInstanceError
@@ -419,3 +420,67 @@ def test_configured_ocr_uses_existing_single_job_and_custom_backend_fails_closed
         assert len(calls) == 1 and calls[0][2] is selected
         with pytest.raises(ConfigurationError, match="CliOcrBackend"):
             convert_pdf(source, ocr=SimpleNamespace(extract=lambda *a: pytest.fail("custom OCR ran")), identify_result=admission)
+
+
+def test_configured_local_tools_limits_and_output_without_ambient_home(tmp_path, monkeypatch, capsys):
+    import json
+    import sys
+
+    from drawbridge import _vellric, cli
+    from drawbridge.configuration import configuration_context, current_configuration
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    source = source_dir / "sample.txt"
+    source.write_text("Configuration controls output.\n")
+    helper = tmp_path / "file-helper"
+    helper.write_text(
+        f"#!{sys.executable}\n"
+        "import os, pathlib\n"
+        "assert pathlib.Path(os.environ['HOME']).parent.name == 'work'\n"
+        "assert os.environ['PATH'] == '/usr/bin:/bin'\n"
+        "print('text/plain')\n"
+    )
+    helper.chmod(0o700)
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps({
+        "drawbridge": {
+            "vellric": {"executable": sys.executable, "tessdata_dir": "langs", "limits": {
+                "timeout_seconds": 12.5, "memory_mib": 768, "max_input_bytes": 200,
+                "max_output_bytes": 300, "max_pages": 9,
+            }},
+            "paths": {"work_dir": "work", "cache_dir": "answers", "output_dir": "output",
+                      "path": ["/usr/bin", "/bin"]},
+            "identify": {"file_executable": str(helper)},
+            "convert": {"json": True, "title": "Configured title"},
+        },
+        "quillric": {"opaque": True},
+    }))
+    monkeypatch.setenv("HOME", str(tmp_path / "forbidden-home"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "forbidden-xdg"))
+    monkeypatch.setenv("DRAWBRIDGE_VELLRIC", str(tmp_path / "wrong-vellric"))
+    monkeypatch.setenv("DRAWBRIDGE_VELLRIC_MEMORY_MIB", "2")
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: pytest.fail("ambient home lookup")))
+    with configuration_context(load_configuration([settings], root=tmp_path)):
+        config = current_configuration()
+        assert _vellric.executable() == str(Path(sys.executable).resolve())
+        assert _vellric.configured_number("TIMEOUT_SECONDS", 3600) == 12.5
+        opts = _vellric.configured_options((), command="convert")
+        for flag, number in [("--memory-mib", "768"), ("--max-input-bytes", "200"),
+                             ("--max-output-bytes", "300"), ("--max-pages", "9"),
+                             ("--tessdata-dir", str(tmp_path / "langs"))]:
+            assert opts[opts.index(flag) + 1] == number
+        assert config.profile.limits.cache_dir == tmp_path / "answers"
+        assert config.quillric_options() == ("--config", str(settings), "--config-root", str(tmp_path))
+    source_dir.chmod(0o500)
+    try:
+        assert cli.main(["convert", str(source), "--config", str(settings), "--title", "CLI title"]) == 0, (
+            "configured file helper must identify the source"
+        )
+    finally:
+        source_dir.chmod(0o700)
+    written = tmp_path / "output" / "sample.txt.md"
+    assert json.loads(capsys.readouterr().out)["output"] == str(written)
+    assert "# CLI title" in written.read_text()
+    assert set(source_dir.iterdir()) == {source}
+    assert not (tmp_path / "forbidden-home").exists()

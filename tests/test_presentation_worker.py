@@ -129,3 +129,38 @@ def test_native_child_terminal_state_keeps_its_failure_class(tmp_path, monkeypat
     with pytest.raises(expected) as caught:
         presentation_mirror(source, ConversionOptions())
     assert type(caught.value) is expected, "native child failure classification"
+
+
+def test_presentation_worker_pins_native_thread_counts(tmp_path, monkeypatch):
+    from pptx import Presentation
+
+    from drawbridge import ConversionOptions, presentation_worker
+    from drawbridge.presentations import presentation_mirror
+
+    if platform.system() not in {"Darwin", "Linux"}:
+        pytest.skip("presentation worker requires a supported native boundary")
+    expected = {
+        "OPENBLAS_NUM_THREADS",
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+    }
+    for variable in expected:
+        monkeypatch.setenv(variable, "8")
+    source = tmp_path / "worker-thread-limits.pptx"
+    deck = Presentation()
+    slide = deck.slides.add_slide(deck.slide_layouts[0])
+    slide.shapes.title.text = "Native thread limits"
+    deck.save(source)
+    real_launch = presentation_worker.subprocess.Popen
+    launches = []
+
+    def launch(argv, **kwargs):
+        launches.append(argv)
+        assert {name: kwargs["env"][name] for name in expected} == dict.fromkeys(expected, "1")
+        return real_launch(argv, **kwargs)
+
+    monkeypatch.setattr(presentation_worker.subprocess, "Popen", launch)
+    mirror = presentation_mirror(source, ConversionOptions())
+    assert len(launches) == 1 and "Native thread limits" in mirror.body

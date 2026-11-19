@@ -38,7 +38,7 @@ The helper refuses a changed or missing Conric source and any additional direct 
 
 The optional audio extra installs the **Quillric** distribution. Its compatibility Python namespace/CLI and retained artifact directories remain `transcribe`; do not install a separate old distribution named transcribe. Provider stages need an explicit profile and keys and can incur charges. Start with dry-run; those paid examples are not part of local PDF release qualification.
 
-Developer setup: `uv sync --locked --group dev`, configure the independent Vellric executable, then `uv run --locked pytest`. Existing live tests require actual qualified OCR tools; they are not silently skipped when the engine is missing.
+For a developer checkout, use `./bin/setup` and `./bin/test` with a qualified independent Vellric. The test harness visibly skips tests marked `live` when either `ocrmypdf` or `tesseract` is absent from its PATH. An installed OCR qualification requires those tests or equivalent installed smoke checks to execute successfully.
 
 Optional Quillric is installed from its published `v0.1.0` GitHub release tag, resolved by the lock to the previously qualified commit. From the directory containing the Drawbridge wheel, install the tagged source dependency first, then the audio extra:
 
@@ -56,3 +56,36 @@ This route requires Git and network access to the public source and dependency i
 Ordinary PowerPoint ingestion needs the separately installed locked python-pptx, lxml and XlsxWriter dependencies; no renderer or PDF engine is needed. The worker requires its documented operating-system controls. Installed PowerPoint qualification targets Python 3.12.12 on macOS arm64 and Linux aarch64. Fresh installed native/configured/OCR PDF qualification is on macOS arm64 only. Other advertised Python versions, including the 3.13 and 3.14 classifiers, are not additional installation-trial claims. See [PowerPoint boundaries](POWERPOINT.md) and [release facts](RELEASES.md).
 
 The wheel and matching source archive are the public installation artifacts. The source archive supplies its lock, build constraints, notices, public fixtures and product tests. A public repository checkout can run product tests with declared prerequisites. The complete maintainer gate also audits private retained phase acceptance under ignored operational storage; a fresh public clone does not contain that proof and cannot replay that portion of the gate. Public CI runs the product test wrapper and does not establish private historical acceptance. No private proof is needed to install or use the release artifacts, and it must not be copied into them.
+
+
+## Offline Linux aarch64 source qualification
+
+The following procedure is for wheels built from the matching unreleased source. Prepare a local glibc arm64 image with Python 3.12, the `en_US.UTF-8` locale, `file` and its magic database, Tesseract and the selected tessdata, OCRmyPDF, its qualified system dependencies including Ghostscript and QPDF where used, and a font for the synthetic OCR example. Keep Vellric and its native Python dependencies in a separate runtime. Record the image digest, the exact executable paths and versions, and the candidate source identity. The optional audio route additionally needs `ffmpeg` and `ffprobe`. The Linux PPTX worker uses the installed Python executable and Linux seccomp through libc.
+
+Prepare a wheelhouse for the image's architecture, ABI and glibc version. Build the Drawbridge and Conric wheels from the candidate source and exact locked Conric commit. Stage the independently pinned Vellric wheel and its exact dependencies. Provide a hash-locked requirements file for each environment that names the local wheels by version and hash, including all transitive dependencies. Use the locked Quillric source wheel only for an audio-enabled build, and include the locked Botocore wheels only for the optional SigV4 transport. Keep the candidate wheel hash and the original source commits in the qualification record.
+
+Run installation and verification in a local container started with `--pull=never --platform linux/arm64 --network none`. Mount the wheelhouse and source read-only. Give the container a separate writable work directory for the environments, mirrors and temporary files. With the verified requirements mounted at `/wheelhouse/drawbridge.txt` and `/wheelhouse/vellric.txt`, install each independently:
+
+```sh
+python -m venv /work/drawbridge
+```
+
+```sh
+python -m venv /work/vellric
+```
+
+```sh
+/work/drawbridge/bin/python -m pip install --no-index --find-links /wheelhouse --no-deps --require-hashes -r /wheelhouse/drawbridge.txt
+```
+
+```sh
+/work/vellric/bin/python -m pip install --no-index --find-links /wheelhouse --no-deps --require-hashes -r /wheelhouse/vellric.txt
+```
+
+Using `--no-deps` is intentional for the verified, complete wheel lists: the published metadata contains direct source references that a resolver could otherwise try to fetch. Keep `file` at `/usr/bin/file`, expose the qualified OCR tools on the executable path supplied in the smoke script, and install the pinned font at the path provided to the script. Run the doctor and installed checks using the matching source mounted at `/source`. Set `DRAWBRIDGE_CANDIDATE` to the exact identity recorded when building the wheel.
+
+```sh
+/work/drawbridge/bin/python -I /source/scripts/qualify_linux_arm64.py --root /work/qualification --fixtures /source/tests/fixtures --font /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --drawbridge /work/drawbridge/bin/drawbridge --vellric /work/vellric/bin/vellric --candidate "$DRAWBRIDGE_CANDIDATE"
+```
+
+The script generates its text, DOCX, PPTX and image fixtures locally, and uses the matching public born-digital and scanned PDF fixtures. Retain wheel hashes, locale and binary version output, doctor output and successful conversion records for the tested candidate. Include an exact, hash-verified NumPy wheel in the qualification environment. The qualification invokes the real PPTX worker entry point in a fresh Python child, imports NumPy after seccomp is active and the worker's CPU, file-size and address-space limits are set, and requires the worker to report a successful conversion. NumPy is a qualification dependency.

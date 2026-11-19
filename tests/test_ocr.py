@@ -309,3 +309,10 @@ def test_complete_job_resource_limits_follow_grant_and_allow_explicit_overrides(
     assert options[options.index("--max-pages") + 1] == "20000"
     assert options[options.index("--tessdata-dir") + 1] == str(tmp_path.resolve())
     assert kwargs["timeout"] == 7200
+
+
+def test_ocr_page_window_caps_ambient_cpu_count(monkeypatch):
+    monkeypatch.setattr("drawbridge.ocr.os.cpu_count", lambda: 32)
+    assert CliOcrBackend(document_workers=1).ocr_jobs == 1
+    assert CliOcrBackend(document_workers=1, page_workers=3).ocr_jobs == 3
+    assert CliOcrBackend(document_workers=32, page_workers=3).ocr_jobs == 1

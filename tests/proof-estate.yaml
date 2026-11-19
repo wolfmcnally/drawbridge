@@ -642,6 +642,9 @@ families:
   - tests/test_cli.py
   covers:
   - tests/test_cli.py
+  - src/drawbridge/_vellric.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/cli.py
   contract: Retained receiving boundary at tests/test_cli.py
   risk_class: baseline-pending-local-review
   oracle: Existing assertion/output boundary retained; local marginal-value and witness
@@ -660,6 +663,10 @@ families:
   - tests/test_configuration.py
   covers:
   - tests/test_configuration.py
+  - src/drawbridge/_vellric.py
+  - src/drawbridge/configuration.py
+  - src/drawbridge/identify.py
+  - src/drawbridge/cli.py
   contract: Retained receiving boundary at tests/test_configuration.py
   risk_class: baseline-pending-local-review
   oracle: Existing assertion/output boundary retained; local marginal-value and witness
@@ -949,6 +956,9 @@ families:
   - tests/test_live.py
   covers:
   - tests/test_live.py
+  - src/drawbridge/_vellric.py
+  - src/drawbridge/ocr.py
+  - src/drawbridge/orientation.py
   contract: Retained receiving boundary at tests/test_live.py
   risk_class: baseline-pending-local-review
   oracle: Existing assertion/output boundary retained; local marginal-value and witness
@@ -1111,6 +1121,9 @@ families:
   - tests/test_ocr.py
   covers:
   - tests/test_ocr.py
+  - src/drawbridge/_vellric.py
+  - src/drawbridge/ocr.py
+  - src/drawbridge/configuration.py
   contract: Retained receiving boundary at tests/test_ocr.py
   risk_class: baseline-pending-local-review
   oracle: Existing assertion/output boundary retained; local marginal-value and witness
@@ -1219,6 +1232,9 @@ families:
   - tests/test_refine.py
   covers:
   - tests/test_refine.py
+  - src/drawbridge/calls.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/refine.py
   contract: Retained receiving boundary at tests/test_refine.py
   risk_class: baseline-pending-local-review
   oracle: Existing assertion/output boundary retained; local marginal-value and witness
@@ -1381,6 +1397,8 @@ families:
   - tests/test_vellric.py
   covers:
   - tests/test_vellric.py
+  - src/drawbridge/_vellric.py
+  - src/drawbridge/configuration.py
   contract: Retained receiving boundary at tests/test_vellric.py
   risk_class: baseline-pending-local-review
   oracle: Existing assertion/output boundary retained; local marginal-value and witness
@@ -2044,6 +2062,49 @@ families:
     eight-second subprocess deadlines, no network or installs.
   nearest_overlap: Existing parser, installed conversion and governance tests do not
     execute the workflow transport/identity boundary.
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_bedrock.py
+  kind: pytest
+  selectors:
+  - tests/test_bedrock.py
+  source_paths:
+  - tests/test_bedrock.py
+  covers:
+  - src/drawbridge/bedrock.py
+  - src/drawbridge/calls.py
+  - src/drawbridge/profile.py
+  - src/drawbridge/configuration.py
+  - src/drawbridge/cli.py
+  - src/drawbridge/images.py
+  - src/drawbridge/describe.py
+  - src/drawbridge/documents.py
+  - src/drawbridge/structure.py
+  - src/drawbridge/refine.py
+  contract: "Converse uses the declared transport, broker permissions, credentials and limits, and reports categorical outcomes and egress."
+  risk_class: "security, credentials, public-contract, schema, concurrency"
+  oracle: "Real local helper frames and descriptors, deny sentinels, transport fakes, and inspected public reports."
+  admission: "Bounded synthetic calls, at most three concurrent fakes, no provider or AWS calls. The command timeout witness uses a sleeping child bounded by the endpoint deadline."
+  nearest_overlap: "Existing profile and call proofs concern legacy adapters. Audio dry-run proofs omit brokered refinement."
+  tier: changed
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pytest:tests/test_presentation_worker.py::test_presentation_worker_pins_native_thread_counts
+  kind: pytest
+  selectors:
+  - tests/test_presentation_worker.py::test_presentation_worker_pins_native_thread_counts
+  source_paths:
+  - tests/test_presentation_worker.py
+  covers:
+  - src/drawbridge/configuration.py
+  - src/drawbridge/presentation_worker.py
+  - src/drawbridge/presentations.py
+  contract: "The real presentation child starts with native thread counts pinned to one."
+  risk_class: "core-success, public-contract"
+  oracle: "One actual child launch checks its environment against five limit names, then extracts text from a generated deck."
+  admission: "One one-slide deck and one confined child, bounded by the native worker deadline. No OCR or network."
+  nearest_overlap: "The startup and containment proofs do not challenge native math-library thread settings."
   tier: changed
   flake_rate: 0.0
   replacement_lineage: []

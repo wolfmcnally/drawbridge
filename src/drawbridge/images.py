@@ -56,7 +56,9 @@ def _rgb(image):
     return image.convert("RGB")
 
 
-def image_jpeg(image_path: Path, *, max_side: int = 1568, quality: int = 85) -> bytes:
+def image_jpeg(
+    image_path: Path, *, max_side: int = 1568, quality: int = 85, max_bytes: int | None = None,
+) -> bytes:
     """First image frame as bounded RGB JPEG, compositing alpha onto white."""
     if type(max_side) is not int or max_side < 1 or not 1 <= quality <= 95:
         raise ValueError("invalid JPEG size/quality")
@@ -65,9 +67,16 @@ def image_jpeg(image_path: Path, *, max_side: int = 1568, quality: int = 85) -> 
             image = _rgb(source)
             try:
                 image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
-                out = io.BytesIO()
-                image.save(out, format="JPEG", quality=quality)
-                return out.getvalue()
+                while True:
+                    with io.BytesIO() as out:
+                        image.save(out, format="JPEG", quality=quality)
+                        if max_bytes is None or out.tell() <= max_bytes:
+                            return out.getvalue()
+                    side = max(image.size)
+                    if side == 1:
+                        raise DrawbridgeError("image does not fit the configured JPEG byte limit")
+                    smaller = max(1, side * 3 // 4)
+                    image.thumbnail((smaller, smaller), Image.Resampling.LANCZOS)
             finally:
                 image.close()
     except (OSError, ValueError) as exc:

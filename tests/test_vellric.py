@@ -562,3 +562,90 @@ def test_no_file_policy_preserves_exact_legacy_convert_argv(monkeypatch, tmp_pat
         assert argv[:4] == [sys.executable, "convert", str(source.resolve()), "--out"]
         assert argv[5:] == ["--schema", "1", "--expected-sha256", _vellric.sha256_file(source),
                             "--status-json", "--progress", "json", "--timeout-seconds", "60", "--ocr", "auto"]
+
+
+def test_complete_job_limits_are_checked_independently(bundle):
+    root, manifest = bundle
+    info = dict(job="inspect", source_hash=manifest["source"]["sha256"], source_size=manifest["source"]["size"])
+    total = sum(artifact["size"] for artifact in manifest["files"])
+    assert _vellric.validate_bundle(root, manifest, **info, max_output_bytes=total).texts
+    with pytest.raises(_vellric.VellricOperationLimit, match="output exceeds"):
+        _vellric.validate_bundle(root, manifest, **info, max_output_bytes=total - 1)
+    manifest["page_count"] = _vellric.DEFAULT_MAX_PAGES + 1
+    with pytest.raises(_vellric.VellricOperationLimit, match="page records"):
+        _vellric.validate_bundle(root, manifest, **info)
+
+
+def test_manifest_is_read_with_a_bound(tmp_path, monkeypatch):
+    manifest = tmp_path / "manifest.json"
+    manifest.write_bytes(b'{"valid": true}' + b" " * 1024)
+    monkeypatch.setattr(_vellric, "MAX_MANIFEST_BYTES", 32)
+    with pytest.raises(_vellric.VellricOperationLimit, match="manifest exceeds"):
+        _vellric._read_manifest(manifest)
+
+
+def test_vellric_path_uses_legacy_default_or_explicit_value(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from drawbridge.configuration import Configuration, RuntimePaths, configuration_context
+
+    monkeypatch.setenv("PATH", "/unused/ambient")
+    exe = "/pinned/vellric/bin/vellric"
+    with configuration_context(Configuration()):
+        assert _vellric._environment(exe, tmp_path)["PATH"] == "/pinned/vellric/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+    with configuration_context(Configuration(paths=RuntimePaths(path=(Path("/configured"),)))):
+        assert _vellric._environment(exe, tmp_path)["PATH"] == "/configured"
+
+
+@pytest.mark.parametrize("reported_count", [1, 2])
+def test_complete_cli_job_yields_only_when_terminal_count_matches(bundle, tmp_path, monkeypatch, reported_count):
+    root, manifest = bundle
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"%PDF-1.4\nsynthetic source\n")
+    digest = _vellric.sha256_file(source)
+    manifest["source"] = {"sha256": digest, "size": source.stat().st_size}
+    manifest["pages"][0]["anchor"] = f"vellric-pdf-{digest}-page-000001"
+    (root / "manifest.json").write_text(json.dumps(manifest))
+    status = {
+        "schema": _vellric.STATUS,
+        "status": "complete",
+        "code": "complete",
+        "source_sha256": digest,
+        "page_count": reported_count,
+    }
+    cli(tmp_path, monkeypatch, status, body=(
+        "import shutil\n"
+        f"shutil.copytree({str(root)!r}, sys.argv[sys.argv.index('--out') + 1])\n"
+    ))
+    if reported_count == 1:
+        with _vellric.document_job(source, "inspect") as completed:
+            assert completed.texts == ("Native evidence.\n",)
+            assert completed.anchors == (manifest["pages"][0]["anchor"],)
+    else:
+        with pytest.raises(ConversionOperationalError, match="terminal/manifest count mismatch"):
+            with _vellric.document_job(source, "inspect"):
+                pytest.fail("inconsistent job yielded a bundle")
+
+
+def test_explicit_vellric_lookup_and_scratch_ignore_ambient_defaults(tmp_path, monkeypatch):
+    from drawbridge.configuration import Configuration, RuntimePaths, configuration_context, temporary_directory
+
+    exe = tmp_path / "vellric"
+    exe.touch(mode=0o700)
+    empty_path = tmp_path / "empty"
+    empty_path.mkdir()
+    monkeypatch.delenv("DRAWBRIDGE_VELLRIC", raising=False)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.setenv("TMPDIR", str(tmp_path / "ambient"))
+    monkeypatch.setattr(os, "defpath", str(empty_path))
+    assert _vellric.executable() == str(exe.resolve())
+    files = (tmp_path / "explicit.yaml",)
+    with configuration_context(Configuration(files=files)):
+        with pytest.raises(ConverterUnavailable):
+            _vellric.executable()
+    scratch = tmp_path / "configured-scratch"
+    paths = RuntimePaths(path=(tmp_path,), work_dir=scratch)
+    with configuration_context(Configuration(files=files, paths=paths)):
+        assert _vellric.executable() == str(exe.resolve())
+        with temporary_directory("test-") as directory:
+            assert os.path.dirname(directory) == str(scratch)

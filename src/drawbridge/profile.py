@@ -9,19 +9,23 @@ environment variable that does.
 from __future__ import annotations
 
 import os
+import re
+import threading
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 import yaml
+from conric import SecretRef
 
 from .errors import DrawbridgeError
 
-ENDPOINT_KINDS = frozenset({"openai-compatible", "anthropic", "ollama", "elevenlabs", "auphonic", "command"})
-EGRESS = frozenset({"cloud", "local"})
+ENDPOINT_KINDS = frozenset({"openai-compatible", "anthropic", "ollama", "elevenlabs", "auphonic", "bedrock-converse"})
+EGRESS = frozenset({"cloud", "local", "brokered"})
 _ENDPOINT_KEYS = frozenset({"kind", "base_url", "api_key_env", "egress", "timeout_seconds", "max_concurrency", "command", "cost_per_audio_hour_usd"})
 _LIMIT_KEYS = frozenset({"max_pages_per_document", "max_audio_minutes", "max_audio_minutes_per_run", "cache_dir"})
-_TOP_KEYS = frozenset({"endpoints", "stages", "limits", "presentation_notes"})
+_TOP_KEYS = frozenset({"endpoints", "stages", "limits", "presentation_notes", "allow_brokered"})
 
 #: Stage order is pipeline order. ``acts_on`` is the widest set a stage may apply to; ``default`` is
 #: what it applies to when the profile does not say. A profile may narrow ``applies_to``, never widen.
@@ -79,6 +83,26 @@ class EgressRefused(ProfileError):
 
 
 @dataclass(frozen=True)
+class BedrockSettings:
+    region: str
+    transport: str
+    max_output_tokens: int
+    max_image_bytes: int
+    max_image_side_px: int
+    pass_env: tuple[str, ...] = ()
+    pass_fds: tuple[int, ...] = ()
+
+
+BEDROCK_STAGES = frozenset({"structure", "image_description", "transcript_refinement"})
+BEDROCK_MAX_IMAGE_BYTES = 3_932_160
+BEDROCK_MAX_IMAGE_SIDE = 8_000
+_ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_REGION = re.compile(r"[a-z]{2}(?:-[a-z]+){1,3}-[1-9][0-9]*")
+_FOUNDATION = re.compile(r"[a-z][a-z0-9-]*\.[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)*(?::[0-9]+)?")
+_PROFILE_PREFIXES = {"apac", "au", "eu", "global", "jp", "us", "us-gov"}
+
+
+@dataclass(frozen=True)
 class Endpoint:
     name: str
     kind: str
@@ -89,13 +113,32 @@ class Endpoint:
     max_concurrency: int = 4
     command: tuple[str, ...] = ()
     cost_per_audio_hour_usd: float | None = None  # declared by the user, never assumed
+    bedrock: BedrockSettings | None = None
+    api_key_ref: SecretRef | None = field(default=None, repr=False)
+    _slots: threading.BoundedSemaphore = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        if type(self.max_concurrency) is not int or self.max_concurrency < 1:
+            raise ProfileError("max_concurrency must be a positive integer")
+        object.__setattr__(self, "_slots", threading.BoundedSemaphore(self.max_concurrency))
+
+    @contextmanager
+    def call_slot(self):
+        with self._slots:
+            yield
 
     @property
     def key_is_set(self) -> bool | None:
         """``None`` when the endpoint needs no key."""
-        return None if self.api_key_env is None else bool(os.environ.get(self.api_key_env))
+        name = self.api_key_ref.name if self.api_key_ref is not None else self.api_key_env
+        return None if name is None else bool(os.environ.get(name))
 
     def key(self) -> str:
+        if self.api_key_ref is not None:
+            value = os.environ.get(self.api_key_ref.name)
+            if not value:
+                raise ProfileError("endpoint credential reference could not be resolved")
+            return value
         if self.api_key_env is None:
             raise ProfileError(f"endpoint {self.name} declares no api_key_env")
         value = os.environ.get(self.api_key_env)
@@ -109,7 +152,7 @@ class Limits:
     max_pages_per_document: int = 500
     max_audio_minutes: float = 240.0
     max_audio_minutes_per_run: float | None = None
-    cache_dir: Path = Path("~/.cache/drawbridge")
+    cache_dir: Path | None = Path("~/.cache/drawbridge")
 
 
 @dataclass(frozen=True)
@@ -119,6 +162,7 @@ class Profile:
     stages: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     limits: Limits = field(default_factory=Limits)
     presentation_notes: bool = True
+    allow_brokered: bool = False
 
     def endpoint_for(self, stage: str) -> Endpoint | None:
         name = self.stages.get(stage, {}).get("endpoint")
@@ -129,6 +173,7 @@ class Profile:
         return {
             "path": str(self.path) if self.path else None,
             "presentation_notes": self.presentation_notes,
+            "allow_brokered": self.allow_brokered,
             "endpoints": {
                 name: {
                     "kind": endpoint.kind,
@@ -144,7 +189,7 @@ class Profile:
                 "max_pages_per_document": self.limits.max_pages_per_document,
                 "max_audio_minutes": self.limits.max_audio_minutes,
                 "max_audio_minutes_per_run": self.limits.max_audio_minutes_per_run,
-                "cache_dir": str(self.limits.cache_dir),
+                "cache_dir": str(self.limits.cache_dir) if self.limits.cache_dir is not None else None,
             },
         }
 
@@ -216,17 +261,76 @@ def _unknown(keys: Iterable[str], allowed: frozenset[str] | set[str], where: str
         raise ProfileError(f"{where}: unknown key {', '.join(extra)}")
 
 
+def _bounded_integer(data: Mapping[str, Any], key: str, default: int, ceiling: int | None = None) -> int:
+    value = data.get(key, default)
+    if type(value) is not int or value < 1 or (ceiling is not None and value > ceiling):
+        raise ProfileError("invalid Bedrock endpoint limit")
+    return value
+
+
+def _bedrock_endpoint(name: str, data: Mapping[str, Any]) -> Endpoint:
+    keys = {"kind", "region", "transport", "limits", "egress"}
+    region, transport = data.get("region"), data.get("transport")
+    if not isinstance(region, str) or not _REGION.fullmatch(region):
+        raise ProfileError("Bedrock requires an exact region")
+    if transport not in ("sigv4", "bearer", "command"):
+        raise ProfileError("invalid Bedrock transport")
+    egress = "brokered" if transport == "command" else "cloud"
+    if "egress" in data and data["egress"] != egress:
+        raise ProfileError("Bedrock transport and egress disagree")
+    limits = _mapping(data.get("limits"), "Bedrock limits")
+    _unknown(limits, {"timeout_seconds", "max_concurrency", "max_output_tokens", "max_image_bytes", "max_image_side_px"}, "Bedrock limits")
+    argv, pass_env, pass_fds = (), (), ()
+    key = None
+    if transport == "command":
+        keys.add("command")
+        command = _mapping(data.get("command"), "Bedrock command")
+        _unknown(command, {"argv", "pass_env", "pass_fds"}, "Bedrock command")
+        argv, pass_env, pass_fds = (command.get(k, []) for k in ("argv", "pass_env", "pass_fds"))
+        if (
+            not isinstance(argv, list) or not argv
+            or any(not isinstance(part, str) or "\x00" in part for part in argv)
+            or not Path(argv[0]).is_absolute()
+        ):
+            raise ProfileError("Bedrock command requires an absolute executable and exact argv")
+        if not isinstance(pass_env, list) or any(not isinstance(item, str) or not _ENV_NAME.fullmatch(item) for item in pass_env):
+            raise ProfileError("invalid Bedrock command environment names")
+        if not isinstance(pass_fds, list) or len(pass_fds) > 4 or any(
+            type(fd) is not int or not 3 <= fd <= 255 for fd in pass_fds
+        ):
+            raise ProfileError("invalid Bedrock command file descriptors")
+    if transport == "bearer":
+        keys.add("api_key_env")
+        key = data.get("api_key_env")
+        if not isinstance(key, str) or not _ENV_NAME.fullmatch(key):
+            raise ProfileError("Bedrock bearer requires a named API key")
+    _unknown(data, keys, "Bedrock endpoint")
+    return Endpoint(
+        name, "bedrock-converse", egress, api_key_env=key, command=tuple(argv),
+        timeout_seconds=_bounded_integer(limits, "timeout_seconds", 120),
+        max_concurrency=_bounded_integer(limits, "max_concurrency", 4),
+        bedrock=BedrockSettings(
+            region, transport, _bounded_integer(limits, "max_output_tokens", 1024),
+            _bounded_integer(limits, "max_image_bytes", BEDROCK_MAX_IMAGE_BYTES, BEDROCK_MAX_IMAGE_BYTES),
+            _bounded_integer(limits, "max_image_side_px", BEDROCK_MAX_IMAGE_SIDE, BEDROCK_MAX_IMAGE_SIDE),
+            tuple(pass_env), tuple(pass_fds),
+        ),
+    )
+
+
 def _endpoint(name: str, raw: Any) -> Endpoint:
     data = _mapping(raw, f"endpoint {name}")
-    _unknown(data, _ENDPOINT_KEYS, f"endpoint {name}")
     kind, egress = data.get("kind"), data.get("egress")
+    if kind == "bedrock-converse":
+        return _bedrock_endpoint(name, data)
+    _unknown(data, _ENDPOINT_KEYS, f"endpoint {name}")
+    if kind == "command":
+        raise ProfileError("bare command endpoints are unavailable; use bedrock-converse with command transport")
     if kind not in ENDPOINT_KINDS:
         raise ProfileError(f"endpoint {name}: kind must be one of {', '.join(sorted(ENDPOINT_KINDS))}")
-    if egress not in EGRESS:
+    if egress not in {"cloud", "local"}:
         raise ProfileError(f"endpoint {name}: egress must be declared as cloud or local; it is never inferred")
     command = data.get("command") or ()
-    if kind == "command" and not command:
-        raise ProfileError(f"endpoint {name}: a command endpoint needs a command")
     if isinstance(command, str) or not all(isinstance(part, str) for part in command):
         raise ProfileError(f"endpoint {name}: command must be a list of strings")
     for secret in ("api_key", "key", "token", "secret"):
@@ -267,6 +371,15 @@ def _stage(name: str, raw: Any, endpoints: Mapping[str, Endpoint]) -> Mapping[st
         raise ProfileError(f"stage {name}: endpoint {reference} is not declared")
     if reference is None and spec["needs_endpoint"](data):
         raise ProfileError(f"stage {name} needs an endpoint")
+    if reference is not None and endpoints[reference].bedrock is not None:
+        model = data.get("model")
+        if name not in BEDROCK_STAGES:
+            raise ProfileError("Bedrock endpoint is unavailable for this stage")
+        if (
+            not isinstance(model, str) or not _FOUNDATION.fullmatch(model)
+            or model.split(".", 1)[0] in _PROFILE_PREFIXES
+        ):
+            raise ProfileError("Bedrock stages require an exact foundation model ID")
     return data
 
 
@@ -276,6 +389,9 @@ def parse_profile(raw: Any, path: Path | None = None) -> Profile:
     notes = data.get("presentation_notes", True)
     if type(notes) is not bool:
         raise ProfileError("presentation_notes must be boolean")
+    allow_brokered = data.get("allow_brokered", False)
+    if type(allow_brokered) is not bool:
+        raise ProfileError("allow_brokered must be boolean")
     endpoints = {name: _endpoint(name, value) for name, value in _mapping(data.get("endpoints"), "endpoints").items()}
     stages = {name: _stage(name, value, endpoints) for name, value in _mapping(data.get("stages"), "stages").items()}
     limits_raw = _mapping(data.get("limits"), "limits")
@@ -289,7 +405,10 @@ def parse_profile(raw: Any, path: Path | None = None) -> Profile:
         cache_dir=Path(str(limits_raw.get("cache_dir", defaults.cache_dir))),
     )
     ordered = {name: stages[name] for name in STAGE_NAMES if name in stages}
-    return Profile(path=path, endpoints=endpoints, stages=ordered, limits=limits, presentation_notes=notes)
+    return Profile(
+        path=path, endpoints=endpoints, stages=ordered, limits=limits,
+        presentation_notes=notes, allow_brokered=allow_brokered,
+    )
 
 
 def load_profile(path: Path) -> Profile:
@@ -347,11 +466,22 @@ class Plan:
         return tuple(item.stage for item in self.stages if item.runs and item.egress == "cloud")
 
     @property
+    def brokered_stages(self) -> tuple[str, ...]:
+        return tuple(item.stage for item in self.stages if item.runs and item.egress == "brokered")
+
+    @property
+    def egress_stages(self) -> tuple[str, ...]:
+        return tuple(item.stage for item in self.stages if item.runs and item.egress in {"cloud", "brokered"})
+
+    @property
     def missing_keys(self) -> tuple[str, ...]:
         return tuple(item.stage for item in self.stages if item.runs and item.key_set is False)
 
     def as_dict(self) -> dict[str, Any]:
-        return {"media_type": self.media_type, "stages": [item.as_dict() for item in self.stages], "sends_bytes_off_machine": list(self.cloud_stages), "missing_keys": list(self.missing_keys)}
+        data = {"media_type": self.media_type, "stages": [item.as_dict() for item in self.stages], "sends_bytes_off_machine": list(self.egress_stages), "missing_keys": list(self.missing_keys)}
+        if self.brokered_stages:
+            data["brokered_stages"] = list(self.brokered_stages)
+        return data
 
 
 def build_plan(
@@ -398,8 +528,10 @@ def build_plan(
         else:
             planned.append(StagePlan(name, True, "profile enables it", **detail))
     plan = Plan(media_type, tuple(planned))
-    if local_only and plan.cloud_stages:
-        raise EgressRefused(f"--local-only refuses {', '.join(plan.cloud_stages)}: each would send bytes off this machine", plan)
+    if local_only and plan.egress_stages:
+        raise EgressRefused(f"--local-only refuses {', '.join(plan.egress_stages)}: each requires cloud or brokered egress", plan)
+    if plan.brokered_stages and not profile.allow_brokered:
+        raise EgressRefused("brokered stages require allow_brokered: true", plan)
     return Plan(media_type, tuple(
         StagePlan(item.stage, item.runs, item.reason, item.endpoint, item.egress,
                   profile.endpoints[item.endpoint].key_is_set if item.runs and item.endpoint else None,

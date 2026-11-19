@@ -117,3 +117,58 @@ def test_two_column_image_keeps_column_reading_order(tmp_path):
     result = recover_page(source, 1)
     assert result.rotation == 0
     assert result.text.index("ALPHA COLUMN") < result.text.index("END ALPHA") < result.text.index("BETA COLUMN") < result.text.index("END BETA")
+
+
+def test_scan_raster_scratch_is_bounded_by_ocr_window(tmp_path):
+    import json
+    from threading import Event, Thread
+
+    from drawbridge.configuration import configuration_context, load_configuration
+
+    image = pymupdf.open()
+    page = image.new_page(width=612, height=792)
+    page.insert_text((72, 72), "LOCAL SCAN", fontsize=24)
+    raster = page.get_pixmap(dpi=300).tobytes("png")
+    image.close()
+    peak = {}
+    for count in (1, 16):
+        source = tmp_path / f"scan-{count}.pdf"
+        with pymupdf.open() as document:
+            xref = 0
+            for _ in range(count):
+                page = document.new_page(width=612, height=792)
+                xref = page.insert_image(page.rect, xref=xref) if xref else page.insert_image(page.rect, stream=raster)
+            document.save(source)
+        work = tmp_path / f"work-{count}"
+        config = tmp_path / f"config-{count}.json"
+        config.write_text(json.dumps({
+            "drawbridge": {"paths": {"work_dir": str(work)}, "convert": {"ocr_page_workers": 1}},
+            "vellric": {},
+        }))
+        finished = Event()
+        peak[count] = 0
+
+        def sample():
+            while not finished.wait(0.02):
+                sizes = 0
+                for path in work.rglob("*.pnm"):
+                    try:
+                        sizes += path.stat().st_size
+                    except FileNotFoundError:
+                        pass
+                peak[count] = max(peak[count], sizes)
+
+        observer = Thread(target=sample)
+        observer.start()
+        try:
+            with configuration_context(load_configuration([config])):
+                result = convert_pdf(source, ocr=CliOcrBackend(preflight=False))
+        finally:
+            finished.set()
+            observer.join()
+        assert len(result.selected_pages) == count
+        assert "LOCAL SCAN" in result.mirror.body
+    print(f"OCR raster peak scratch bytes: 1 page={peak[1]}, 16 pages={peak[16]}")
+    one_page_bytes = 2550 * 3300 * 3
+    assert peak[1] >= one_page_bytes // 2
+    assert 0 < peak[16] <= peak[1] + one_page_bytes, "raster scratch exceeded one additional page"

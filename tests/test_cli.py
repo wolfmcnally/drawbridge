@@ -37,6 +37,7 @@ def test_convert_blocked_exit_code(encrypted_pdf, capsys):
     assert json.loads(capsys.readouterr().out)["reason"] == "password-protected"
 
 
+@pytest.mark.requires_vellric
 def test_convert_failed_exit_code(fixtures, capsys):
     assert cli.main(["convert", str(fixtures / "invalid.pdf")]) == cli.EXIT_FAILED
     assert "failed:" in capsys.readouterr().err
@@ -176,3 +177,12 @@ def test_a_bad_profile_is_a_usage_error_before_anything_runs(recording, tmp_path
     bad.write_text("stages:\n  transcription: {provider: elevenlabs, endpoint: nowhere}\n")
     assert cli.main(["convert", str(path), "--profile", str(bad)]) == cli.EXIT_USAGE
     assert "endpoint nowhere is not declared" in capsys.readouterr().err
+
+
+def test_missing_vellric_is_operational_for_convert_and_inspect(fixtures, tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("DRAWBRIDGE_VELLRIC", str(tmp_path / "missing-vellric"))
+    source = fixtures / "trivial.pdf"
+    assert cli.main(["convert", str(source), "--no-profile", "--json"]) == 5
+    assert json.loads(capsys.readouterr().out)["outcome"] == "operational"
+    assert cli.main(["inspect", str(source)]) == 5
+    assert json.loads(capsys.readouterr().out)["code"] == "dependency-unavailable"

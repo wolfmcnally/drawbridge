@@ -400,14 +400,18 @@ def convert_file(
     flags: list[str] = []
     if media_type is None:
         media_type, flags = sniff_media_type(path)
-    from .configuration import configuration_active, current_configuration
+    from .configuration import configuration_active, current_configuration, stage_selection
 
     configuration = current_configuration()
     if configuration_active():
         profile = profile if profile is not None else configuration.profile
         # A caller's plan may narrow the scoped policy, never widen it.
-        plan = build_plan(profile, media_type, restrictions=plan,
-                          local_only=configuration.local_only, no_ai=configuration.no_ai)
+        plan = build_plan(
+            profile, media_type, restrictions=plan,
+            only=stage_selection(configuration.convert.get("stages")) if plan is None else None,
+            skip=(stage_selection(configuration.convert.get("skip")) or ()) if plan is None else (),
+            local_only=configuration.local_only, no_ai=configuration.no_ai,
+        )
     if flags:
         options = options.with_verify(flags)
     from .presentations import presentation_family
@@ -470,7 +474,8 @@ def convert_file(
             plan=plan,
             options=options,
             media_type=media_type,
-            artifacts_dir=artifacts_dir or path.parent,
+            artifacts_dir=(artifacts_dir or configuration.convert.get("artifacts_dir")
+                           or configuration.paths.output_dir or configuration.paths.work_dir or path.parent),
             budget=budget,
         )
         semantic = None
@@ -521,6 +526,8 @@ def plan_report(
 
         decision = decide(path, profile, plan)
         report["decision"] = decision.as_dict()
-        report["sends_bytes_off_machine"] = list(decision.cloud_stages)
+        planned = set(plan.egress_stages) - {"audio_cleanup", "transcription"}
+        planned.update(decision.cloud_stages)
+        report["sends_bytes_off_machine"] = [item.stage for item in plan.stages if item.stage in planned]
         report["estimate"] = audio_estimate(profile, decision, audio_minutes(path))
     return report

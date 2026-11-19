@@ -25,18 +25,21 @@ Resolution order, first match wins, no merging:
 
 `--no-profile` ignores all four and runs the local pipeline only. Merging profiles is not supported in the first version; a project that wants a variant of the user profile copies it. If layering proves necessary later, a single `extends: PATH` key with shallow, key-level override is the most that should be added.
 
+Explicit Conric configuration uses the `drawbridge:` section instead of standalone profile discovery. Use `drawbridge.vellric.executable` to select Vellric. Explicit mode still honors `DRAWBRIDGE_VELLRIC` when the configuration omits that executable. Discovery uses `drawbridge.paths.path` if supplied and the system path otherwise. On POSIX, `drawbridge.paths.work_dir` selects scratch, with `/tmp` as the default. Explicit mode bypasses ambient `TMPDIR`, home-based discovery and dotenv. See [the explicit runtime contract](../docs/USAGE.md#runtime-settings-in-unreleased-source).
+
 ## Secrets
 
-The profile never contains a secret. Every endpoint names the environment variable that holds its key (`api_key_env: OPENROUTER_API_KEY`). Before resolving, drawbridge loads a `.env` file from the current directory and then from the profile's own directory, without overriding variables already set, the same convention the `transcribe` project uses. Keys are never printed, never written to any artifact, and never included in `--dry-run` or `profile show` output; those show the variable name and whether it is set.
+The profile never contains a secret. Every endpoint names the environment variable that holds its key (`api_key_env: OPENROUTER_API_KEY`). In standalone profile mode, Drawbridge loads a `.env` file from the current directory and then from the profile's own directory, without overriding variables already set. Keys are never printed, never written to any artifact, and never included in `--dry-run` or `profile show` output; those show the variable name and whether it is set.
 
 ## Endpoints
 
 Endpoints are declared once, by name, and referenced from stages. This keeps one provider's URL and key in one place when several stages share it.
 
 ```yaml
+allow_brokered: true
 endpoints:
   openrouter:
-    kind: openai-compatible        # openai-compatible | anthropic | ollama | elevenlabs | auphonic | command
+    kind: openai-compatible        # openai-compatible | anthropic | ollama | elevenlabs | auphonic | bedrock-converse
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     egress: cloud                  # cloud | local; must be declared, never inferred
@@ -54,15 +57,17 @@ endpoints:
     kind: auphonic
     api_key_env: AUPHONIC_API_KEY
     egress: cloud
-  paddle-ocr:
-    kind: command                  # a local executable that speaks a documented stdin/stdout contract
-    command: ["paddleocr-vl", "--json"]
-    egress: local
+  bedrock-broker:
+    kind: bedrock-converse
+    region: us-west-2
+    transport: command
+    command:
+      argv: ["/usr/local/bin/converse-broker"]
 ```
 
-`kind` selects the adapter. `openai-compatible` is the workhorse: it covers OpenAI, OpenRouter, Ollama's OpenAI endpoint, LM Studio, vLLM and most hosted OCR-model gateways with one implementation of chat completions with image input. `anthropic` is a second small adapter for the Messages API. `elevenlabs` and `auphonic` are provider-specific because their APIs are. `command` runs a local program under a fixed JSON contract so a dedicated OCR model served by its own runtime can be plugged in without a network hop.
+`kind` selects the adapter. `openai-compatible` is the workhorse: it covers OpenAI, OpenRouter, Ollama's OpenAI endpoint, LM Studio, vLLM and most hosted OCR-model gateways with one implementation of chat completions with image input. `anthropic` is a second small adapter for the Messages API. `elevenlabs` and `auphonic` are provider-specific because their APIs are. The `bedrock-converse` adapter supports direct Bedrock access with bearer or SigV4 credentials for structure, image description and transcript refinement. Drawbridge's command transport speaks a versioned broker protocol and requires explicit brokered egress permission. The former bare endpoint kind was accepted by the schema without a runtime implementation. It now fails configuration validation. See [the Bedrock transport contract](../docs/USAGE.md#bedrock-converse).
 
-`egress` is declared by the user because drawbridge cannot know whether a URL is a laptop or a data centre. The CLI's `--local-only` refuses to run any stage whose endpoint declares `cloud`, and every run's plan states which stages will send bytes off the machine.
+`egress` is declared by the user because drawbridge cannot know whether a URL is a laptop or a data centre. The Bedrock transport determines its egress class. The CLI's `--local-only` refuses `cloud` and `brokered` stages, and the dry-run plan lists both under `sends_bytes_off_machine`.
 
 ## Stages
 
@@ -84,7 +89,7 @@ Two stages are non-AI but configured here because they are the substrate the AI 
 ```yaml
 stages:
   ocr:
-    engine: vlm                    # tesseract | vlm | api | command
+    engine: vlm                    # candidate design: tesseract | vlm | api
     endpoint: openrouter
     model: qwen/qwen3-vl-32b-instruct
     applies_to: [pdf-scan-page, image]
@@ -98,7 +103,7 @@ stages:
 
 The recognition engine replaces Tesseract's text for selected pages only. Page selection (empty text or raster coverage) and orientation recovery stay exactly as they are, because a cheap local pass that fixes a sideways page is worth doing before an expensive one. With `orientation: tesseract`, the VLM sees the best-scoring rotation once; with `none` it sees the page as rendered.
 
-Candidate engines, retrieved 2026-09-15. Dedicated open document-OCR models now outperform much larger general VLMs on document benchmarks at small parameter counts: PaddleOCR-VL, GLM-OCR and MinerU2.5 lead OmniDocBench, with olmOCR, HunyuanOCR and DeepSeek-OCR in the same class; general VLMs (Qwen3-VL, GLM-4.5V, Llama 3.2 Vision) trade accuracy for breadth; Tesseract, PaddleOCR, EasyOCR, Surya and docTR remain the traditional local engines. Hosted document APIs (Mistral OCR, Azure Document Intelligence, Google Document AI, AWS Textract) fit the `api` kind. A dedicated model served locally is the natural `command` endpoint; a hosted one is `openai-compatible` through a gateway.
+Candidate engines, retrieved 2026-09-15. Dedicated open document-OCR models now outperform much larger general VLMs on document benchmarks at small parameter counts: PaddleOCR-VL, GLM-OCR and MinerU2.5 lead OmniDocBench, with olmOCR, HunyuanOCR and DeepSeek-OCR in the same class; general VLMs (Qwen3-VL, GLM-4.5V, Llama 3.2 Vision) trade accuracy for breadth; Tesseract, PaddleOCR, EasyOCR, Surya and docTR remain the traditional local engines. Hosted document APIs (Mistral OCR, Azure Document Intelligence, Google Document AI, AWS Textract) fit the `api` kind. A locally served model could be reached through an OpenAI-compatible HTTP endpoint. The Bedrock command transport serves only the stages named above.
 
 ### `structure`
 
@@ -134,7 +139,7 @@ The deterministic native pass needs no endpoint: PyMuPDF span flags give bold, i
 
 ```yaml
   audio_cleanup:
-    provider: auphonic             # auphonic | elevenlabs-isolate | command
+    provider: auphonic
     endpoint: auphonic
     preset: ~/.config/drawbridge/auphonic/leveling-only.json   # provider algorithm JSON, as in `transcribe`
     settings:                      # inline overrides of preset fields
@@ -144,13 +149,13 @@ The deterministic native pass needs no endpoint: PyMuPDF span flags give bold, i
     bitrate_kbps: 128
 ```
 
-The `transcribe` project's measured result (2026-08-29) is the starting preset: speech leveling only at strength 110, denoise, dereverb, filtering, normalisation and every cutter off, because gentle denoise introduced substantive word substitutions in the transcript while barely improving level balance. ElevenLabs Voice Isolator is a batch cloud alternative; local candidates are DeepFilterNet or RNNoise behind a `command` endpoint, or plain ffmpeg filters.
+The `transcribe` project's measured result (2026-08-29) is the starting preset: speech leveling only at strength 110, denoise, dereverb, filtering, normalisation and every cutter off, because gentle denoise introduced substantive word substitutions in the transcript while barely improving level balance. ElevenLabs Voice Isolator is a batch cloud alternative; local candidates include DeepFilterNet, RNNoise and ffmpeg filters. The example here uses the implemented Auphonic route.
 
 ### `transcription`
 
 ```yaml
   transcription:
-    provider: elevenlabs           # elevenlabs | openai-compatible | command
+    provider: elevenlabs
     endpoint: scribe
     model: scribe_v2
     language: auto                 # ISO-639 code or auto
@@ -165,7 +170,7 @@ The `transcribe` project's measured result (2026-08-29) is the starting preset: 
     max_duration_minutes: 240
 ```
 
-The defaults are the ones `transcribe` settled on after its comparison: Scribe v2, automatic speaker count, threshold 0.22, word timestamps, verbatim on, audio events off. A `command` provider covers local whisper.cpp or faster-whisper with a diarization sidecar; an `openai-compatible` provider covers hosted Whisper-style endpoints. The transcript mirror follows the same contract as a PDF mirror: an H1, then one section per speaker turn carrying its timestamp, with the raw response kept for re-rendering.
+The defaults are the ones `transcribe` settled on after its comparison: Scribe v2, automatic speaker count, threshold 0.22, word timestamps, verbatim on, audio events off. Local Whisper and hosted Whisper-style alternatives are candidate designs. The example here uses the implemented ElevenLabs route. The transcript mirror follows the same contract as a PDF mirror: an H1, then one section per speaker turn carrying its timestamp, with the raw response kept for re-rendering.
 
 ### `transcript_refinement`
 
@@ -281,7 +286,7 @@ With this profile, `drawbridge convert scan.pdf` OCRs locally and then restores 
 
 1. Profile loading, schema validation, `.env` handling, `--dry-run` plan, `profile show` and `profile check`. No stage yet. This makes the activation and egress rules real before any endpoint exists.
 2. `structure` with the deterministic native pass and `mode: annotate` for OCR'd pages through the `openai-compatible` adapter. This establishes the semantic artifact and the preservation gate.
-3. `ocr` with `engine: vlm` through the same adapter, then `command`.
+3. Candidate VLM OCR through the OpenAI-compatible adapter.
 4. `transcription` and `audio_cleanup`, porting the `transcribe` project's provider code and presets.
 5. `image_description` and `transcript_refinement`.
 

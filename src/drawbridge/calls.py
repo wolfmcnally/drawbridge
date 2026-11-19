@@ -20,6 +20,9 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Callable, Iterator
 
+from PIL.Image import DecompressionBombError
+
+from .errors import DrawbridgeError
 from .profile import Endpoint
 
 
@@ -83,6 +86,36 @@ def _usage(body: Any) -> tuple[int | None, int | None, str | None]:
         str(cost) if isinstance(cost, (int, float, str)) and not isinstance(cost, bool) else None)
 
 
+def endpoint_cache_scope(endpoint: Endpoint | None) -> tuple[str, ...]:
+    if endpoint is None or endpoint.bedrock is None:
+        return ()
+    return (endpoint.kind, endpoint.name, repr(endpoint.bedrock), repr(endpoint.command))
+
+
+def call_converse(
+    endpoint: Endpoint, model: str, prompt: str, *, stage: str,
+    system: str | None = None, jpeg: bytes | None = None,
+) -> str:
+    from .bedrock import BedrockError, converse
+
+    started = time.monotonic()
+    try:
+        with endpoint.call_slot():
+            result, input_tokens, output_tokens = converse(endpoint, model, prompt, system=system, jpeg=jpeg)
+    except (DrawbridgeError, DecompressionBombError, OSError, ValueError) as exc:
+        if isinstance(exc, BedrockError):
+            category = exc.category
+        else:
+            category = "limit" if isinstance(exc, DecompressionBombError) else "unavailable"
+        report(ModelCall(stage, endpoint.name, model, "failed", round(time.monotonic() - started, 3), failure=category))
+        raise BedrockError(category) from None
+    report(ModelCall(
+        stage, endpoint.name, model, "succeeded", round(time.monotonic() - started, 3),
+        prompt_tokens=input_tokens, completion_tokens=output_tokens,
+    ))
+    return result
+
+
 def chat_completion(endpoint: Endpoint, model: str, payload: dict[str, Any], *, stage: str) -> dict[str, Any]:
     """POST one OpenAI-compatible chat completion and report it. Returns the response body; raises
     what the transport or the body raises, after reporting the failed call."""
@@ -96,7 +129,7 @@ def chat_completion(endpoint: Endpoint, model: str, payload: dict[str, Any], *, 
                                      data=json.dumps(body_payload).encode(), headers=headers)
     started = time.monotonic()
     try:
-        with urllib.request.urlopen(request, timeout=endpoint.timeout_seconds) as response:
+        with endpoint.call_slot(), urllib.request.urlopen(request, timeout=endpoint.timeout_seconds) as response:
             body = json.load(response)
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         report(ModelCall(stage, endpoint.name, model, "failed", round(time.monotonic() - started, 3),

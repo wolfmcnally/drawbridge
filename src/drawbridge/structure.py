@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from .calls import chat_completion
+from .calls import call_converse, chat_completion, endpoint_cache_scope
 from .errors import ConversionOperationalError
 from .mirror import Mirror, now_iso, parse_mirror_header
 from .native import BULLETS
@@ -137,7 +137,7 @@ def openai_compatible_annotator(
     endpoint: Endpoint, model: str, prompt: str = PROMPT
 ) -> Annotator:
     """One implementation covers OpenAI, OpenRouter, Ollama's OpenAI endpoint, LM Studio and vLLM."""
-    if not endpoint.base_url:
+    if endpoint.bedrock is None and not endpoint.base_url:
         raise ProfileError(f"endpoint {endpoint.name} needs a base_url")
 
     def annotate(lines: list[str]) -> dict[str, Any]:
@@ -153,9 +153,12 @@ def openai_compatible_annotator(
             ],
         }
         try:
+            if endpoint.bedrock is not None:
+                return json_object(call_converse(endpoint, model, numbered, stage="structure", system=prompt))
             body = chat_completion(endpoint, model, payload, stage="structure")
             return json_object(body["choices"][0]["message"]["content"])
         except (
+            ConversionOperationalError,
             urllib.error.URLError,
             TimeoutError,
             KeyError,
@@ -382,13 +385,14 @@ def run_structure(
             )
         endpoint, model = profile.endpoint_for("structure"), str(stage.get("model", ""))
         annotate = annotate or openai_compatible_annotator(endpoint, model)
-        if stage.get("cache", True):
+        if stage.get("cache", True) and profile.limits.cache_dir is not None:
             annotate = Cache(profile.limits.cache_dir).wrap(
                 annotate,
                 str(header["content_hash"]),
                 "structure",
                 model,
                 hashlib.sha256(PROMPT.encode()).hexdigest(),
+                *endpoint_cache_scope(endpoint),
             )
     else:
         annotate = None
