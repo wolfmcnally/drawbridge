@@ -90,7 +90,7 @@ Source-only helper used by `setup`, `test`, `check`, and `python`. It validates 
 
 ### `check` — authoritative repository build gate
 
-The single authoritative entry point for automated repository checks. It resolves the repo root from its own location, validates the complete toolchain bundle, probes the selected locked environment, then runs the selected named mode with the identical runtime selection. Its `test` mode delegates to `bin/test`. `all` validates immutable logs before expensive work, then runs lint, format verification, tests, and deterministic policy checks including final log revalidation in order. Child failures retain their exact status and emit a terminal `CHECK <name> FAIL`; success ends with `CHECK ALL PASS`. The test lane of `all` runs through `bin/test --reuse`, so proofs whose inputs are unchanged since the last fully passing tree are not repeated; `all --no-reuse` runs every test. `report` runs every lane to the end for diagnosis, names each failed or incomplete lane in a final `CHECK REPORT` line, and never stores a receipt. Each lane's terminal line carries its elapsed seconds. Every `all` run also captures a complete durable log and terminal run metadata under `.kickoff/check-all/`; success stores a receipt bound to the exact candidate, environment fingerprint, and log digest.
+The single authoritative entry point for automated repository checks. It resolves the repo root from its own location, validates the complete toolchain bundle, probes the selected locked environment, then runs the selected named mode with the identical runtime selection. Its `test` mode delegates to `bin/test`. `all` validates immutable logs, execution reports and catalogs before expensive work, then runs lint, format verification, tests, and deterministic policy checks in order; the policy lane repeats those three checks on the final tree. Child failures retain their exact status and emit a terminal `CHECK <name> FAIL`; success ends with `CHECK ALL PASS`. The test lane of `all` runs through `bin/test --reuse`, so proofs whose inputs are unchanged since the last fully passing tree are not repeated; `all --no-reuse` runs every test. `report` runs every lane to the end for diagnosis, names each failed or incomplete lane in a final `CHECK REPORT` line, and never stores a receipt. Each lane's terminal line carries its elapsed seconds. Every `all` run also captures a complete durable log and terminal run metadata under `.kickoff/check-all/`; success stores a receipt bound to the exact candidate, environment fingerprint, and log digest.
 
 ```bash
 ./bin/check
@@ -248,9 +248,17 @@ policy lane.
 
 Behavioral coverage lives in `tests/test_check_hooks_installed.py`.
 
-### `kickoff-config` — human-editable `kickoff` configuration and enforcement
+### `check-release-worktrees` — one clean checkout before a release
 
-Registered Claude reviews may use `watch --cap-hit-assessment <durable-json>` for the single assessed same-session continuation after a native cap hit. The [cap-hit contract](../policies/role-timeouts.md#cap-hit-assessment-and-one-bounded-continuation) defines exact evidence/cause/candidate/clock fields and finite bounds. This retains the original failed invocation and spends the ordinary remaining review allowance; it does not launch automatically or reset budgets.
+A release is cut from one checkout, and work left in another registered worktree of the same repository cannot be seen from it. This check passes only when the repository has exactly one registered worktree, the checkout being released, and that checkout has no tracked, staged or untracked change. Any other registered worktree fails it, clean or not; so does a locked, prunable, bare, missing or unreadable registration, a record without its commit and branch-or-detached fields, and a listing that changes while it is read. It reads `git worktree list --porcelain -z` and `git status --porcelain=v1 -z --untracked-files=all`, so a path containing spaces or newlines is read exactly. It only reads: it never removes, prunes, moves, resets or unlocks anything. Exit 0 is a pass, 1 a refusal naming each worktree and its observed state, and 2 a Git failure, which is never read as clean.
+
+```bash
+./bin/check-release-worktrees
+```
+
+Run it at the start of release preparation and again immediately before each tag or publication, per [`policies/human-in-the-loop.md`](../policies/human-in-the-loop.md#before-a-tag-or-publication-one-clean-checkout). It is not part of `./bin/check all`. Behavioral coverage lives in `tests/test_check_release_worktrees.py`.
+
+### `kickoff-config` — human-editable `kickoff` configuration and enforcement
 
 Validates and safely edits repo-root `kickoff.yaml`, whose `role_models`,
 `role_timeouts`, `research_budgets`, and `run_budgets` sections hold separate
@@ -411,7 +419,7 @@ runtime data. An empty archive is valid before the first completed phase.
 ./bin/check-execution-dashboards --regenerate
 ```
 
-`--regenerate` rewrites any tracked report file that differs from its regeneration, from tracked inputs only, then applies every other check. The plain form never writes.
+`--regenerate` rewrites any tracked report file that differs from its regeneration, from tracked inputs only. It renders every existing report from that report's own accepted trace, handoff and park observations, applies every check to the result, and writes only after the whole archive has validated; a failure leaves every file as it was. It never selects a different accepted trace, never rewrites a handoff and never touches the trace ledger. Run it when a later trace for a phase, such as a cancelled or failed attempt, has changed a report that was already rendered. The plain form never writes.
 
 ### `serve-execution-dashboard` — local report server
 
@@ -676,7 +684,7 @@ An attested continuation starts its own role numbering at 1 if any additional re
 
 ## Durable evidence and interruption
 
-`kickoff-evidence init` defaults to an opaque `.kickoff/runs/` directory and refuses known temporary storage; keep preflight and all required outputs persistent too. Gate artifacts, diagnostics and revision packets are retained by content address and rehashed during validation. See [evidence storage](../policies/orchestration-evidence.md#retained-artifact-validation-and-interrupted-adoption).
+`kickoff-evidence init` first runs the checkout's own `bin/check-catalogs` and refuses, capturing nothing, when it fails. It defaults to an opaque `.kickoff/runs/` directory and refuses known temporary storage; keep preflight and all required outputs persistent too. Gate artifacts, diagnostics and revision packets are retained by content address and rehashed during validation. See [evidence storage](../policies/orchestration-evidence.md#retained-artifact-validation-and-interrupted-adoption).
 
 `execution-telemetry interrupt --trace-id <old> --successor-trace-id <new> --custody-evidence <file>` records a separately checked cross-boot interruption/successor observation without closing or rewriting the old trace. See [clock and custody requirements](../policies/execution-telemetry.md#cross-boot-interruption-observation). It supplies no missing original review evidence or new review allowance.
 

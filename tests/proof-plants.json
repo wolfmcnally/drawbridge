@@ -26,6 +26,24 @@
       "with": ""
     }
   },
+  "pytest:tests/test_check.py::test_stale_catalog_or_report_stops_the_gate_before_lint_and_tests[check-catalogs-policy-catalogs]": {
+    "defect": "The early guards skip the catalog check, leaving it to the final policy lane",
+    "expect": "STALE BOOKKEEPING REACHED EXPENSIVE GATES OR PASSED RECEIPT",
+    "plant": {
+      "path": "bin/check",
+      "replace": "    run_gate policy-execution-dashboards ./bin/check-execution-dashboards || return $?\n    run_gate policy-catalogs ./bin/check-catalogs || return $?\n",
+      "with": "    run_gate policy-execution-dashboards ./bin/check-execution-dashboards || return $?\n"
+    }
+  },
+  "pytest:tests/test_check.py::test_stale_catalog_or_report_stops_the_gate_before_lint_and_tests[check-execution-dashboards-policy-execution-dashboards]": {
+    "defect": "The early guards skip the execution-report check, leaving it to the final policy lane",
+    "expect": "STALE BOOKKEEPING REACHED EXPENSIVE GATES OR PASSED RECEIPT",
+    "plant": {
+      "path": "bin/check",
+      "replace": "    cd \"$repo_root\"\n    run_gate policy-execution-dashboards ./bin/check-execution-dashboards || return $?\n",
+      "with": "    cd \"$repo_root\"\n"
+    }
+  },
   "pytest:tests/test_check_catalogs.py::test_a_phase_names_other_phases_by_id_and_a_path_is_refused": {
     "defect": "The catalog checker prints its findings but exits successfully",
     "expect": "failed",
@@ -53,6 +71,15 @@
       "with": "        print(\"\\n\".join(sorted(DRIFT)))\n        return 0"
     }
   },
+  "pytest:tests/test_check_catalogs.py::test_registering_a_registered_document_again_changes_nothing": {
+    "defect": "A repeated registration is refused as an error",
+    "expect": "REPEATED REGISTRATION WAS REFUSED OR REWROTE THE CATALOG",
+    "plant": {
+      "path": "bin/check-catalogs",
+      "replace": "            print(\"DOCUMENT ALREADY REGISTERED; nothing written\")\n            return\n",
+      "with": "            raise ValueError(\"document is already registered\")\n"
+    }
+  },
   "pytest:tests/test_check_catalogs.py::test_structured_phase_order_and_events_are_checked_by_the_catalog": {
     "defect": "The catalog checker prints its findings but exits successfully",
     "expect": "failed",
@@ -60,6 +87,150 @@
       "path": "bin/check-catalogs",
       "replace": "        print(\"\\n\".join(sorted(DRIFT)))\n        return 1",
       "with": "        print(\"\\n\".join(sorted(DRIFT)))\n        return 0"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_directory_below_the_checkout_top_is_not_a_release_checkout": {
+    "defect": "The root is not compared with the top of the checkout",
+    "expect": "DIRECTORY BELOW THE CHECKOUT TOP PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    if toplevel.resolve() != root:\n",
+      "with": "    if False:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_failed_git_command_is_an_error_and_never_a_pass[status]": {
+    "defect": "A failed git command is read as empty output",
+    "expect": "FAILED GIT COMMAND READ AS A CLEAN RESULT",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    if result.returncode != 0:\n        detail",
+      "with": "    if False:\n        detail"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_failed_git_command_is_an_error_and_never_a_pass[worktree]": {
+    "defect": "A failed git command is read as empty output",
+    "expect": "FAILED GIT COMMAND READ AS A CLEAN RESULT",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    if result.returncode != 0:\n        detail",
+      "with": "    if False:\n        detail"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_linked_worktree_is_not_a_release_checkout": {
+    "defect": "Other registered worktrees are not reported",
+    "expect": "RELEASE FROM A LINKED WORKTREE PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    for other in others:\n",
+      "with": "    for other in []:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_record_without_its_identity_fields_is_refused[both]": {
+    "defect": "A record's commit and branch-or-detached fields are not required",
+    "expect": "RECORD WITHOUT IDENTITY FIELDS PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "        if \"bare\" not in registration.attributes:\n",
+      "with": "        if False:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_record_without_its_identity_fields_is_refused[no-branch-or-detached]": {
+    "defect": "A record's commit and branch-or-detached fields are not required",
+    "expect": "RECORD WITHOUT IDENTITY FIELDS PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "        if \"bare\" not in registration.attributes:\n",
+      "with": "        if False:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_record_without_its_identity_fields_is_refused[none]": {
+    "defect": "A record's commit and branch-or-detached fields are not required",
+    "expect": "RECORD WITHOUT IDENTITY FIELDS PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "        if \"bare\" not in registration.attributes:\n",
+      "with": "        if False:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_worktree_path_with_a_space_and_a_newline_is_read_exactly": {
+    "defect": "A worktree path is cut at its first newline",
+    "expect": "WORKTREE PATH WAS NOT PARSED EXACTLY",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "        registration = Registration(fields[0][9:])\n",
+      "with": "        registration = Registration(fields[0][9:].split(\"\\n\")[0])\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_an_extra_registered_worktree_refuses_clean_or_dirty[clean]": {
+    "defect": "Other registered worktrees are not reported",
+    "expect": "EXTRA WORKTREE PASSED OR ITS STATE WAS MISREPORTED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    for other in others:\n",
+      "with": "    for other in []:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_an_extra_registered_worktree_refuses_clean_or_dirty[dirty]": {
+    "defect": "A dirty extra worktree is described as clean",
+    "expect": "EXTRA WORKTREE PASSED OR ITS STATE WAS MISREPORTED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    return f\"dirty, {len(changes)} changed or untracked path(s)\" if changes else \"clean\"",
+      "with": "    return \"clean\""
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_an_unusable_extra_registration_refuses[locked]": {
+    "defect": "Prunable and locked registrations are not recognized",
+    "expect": "UNUSABLE REGISTRATION PASSED OR WAS MISREPORTED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    for flag in (\"bare\", \"prunable\", \"locked\"):\n        if flag in registration.attributes:",
+      "with": "    for flag in (\"bare\",):\n        if flag in registration.attributes:"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_an_unusable_extra_registration_refuses[missing]": {
+    "defect": "Prunable and locked registrations are not recognized",
+    "expect": "UNUSABLE REGISTRATION PASSED OR WAS MISREPORTED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    for flag in (\"bare\", \"prunable\", \"locked\"):\n        if flag in registration.attributes:",
+      "with": "    for flag in (\"bare\",):\n        if flag in registration.attributes:"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_any_change_in_the_release_checkout_refuses[staged]": {
+    "defect": "Changes in the release checkout are read and then ignored",
+    "expect": "DIRTY RELEASE CHECKOUT PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "        changes = dirt(item.path)\n        if changes:\n",
+      "with": "        changes = dirt(item.path)\n        if False:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_any_change_in_the_release_checkout_refuses[tracked]": {
+    "defect": "Changes in the release checkout are read and then ignored",
+    "expect": "DIRTY RELEASE CHECKOUT PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "        changes = dirt(item.path)\n        if changes:\n",
+      "with": "        changes = dirt(item.path)\n        if False:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_any_change_in_the_release_checkout_refuses[untracked]": {
+    "defect": "Untracked files are left out of the status read",
+    "expect": "DIRTY RELEASE CHECKOUT PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "\"--untracked-files=all\"",
+      "with": "\"--untracked-files=no\""
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_one_clean_release_checkout_passes": {
+    "defect": "The check refuses a checkout that is registered exactly once",
+    "expect": "SOLE CLEAN RELEASE CHECKOUT REFUSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    if len(current) != 1:\n",
+      "with": "    if len(current) != 0:\n"
     }
   },
   "pytest:tests/test_documentation.py::test_setup_installs_exact_versions_locally_without_global_upgrade": {
@@ -71,31 +242,22 @@
       "with": ""
     }
   },
+  "pytest:tests/test_execution_dashboard.py::test_regeneration_repairs_a_changed_history_whole_or_not_at_all": {
+    "defect": "Regeneration treats a handoff as a generated file and rewrites one that differs",
+    "expect": "REGENERATION REWROTE AN INPUT, WROTE BEFORE VALIDATING OR LOST THE ACCEPTED TRACE",
+    "plant": {
+      "path": "bin/check-execution-dashboards",
+      "replace": "                regenerated / relative / \"handoff.json\",\n                generated=False,\n",
+      "with": "                regenerated / relative / \"handoff.json\",\n"
+    }
+  },
   "pytest:tests/test_execution_dashboard.py::test_stale_dashboard_refuses_until_regenerated_from_tracked_inputs": {
     "defect": "Make regeneration report success without rewriting",
     "expect": "STALE DASHBOARD PASSED OR REGENERATION DID NOT RESTORE TRACKED BYTES",
     "plant": {
       "path": "bin/check-execution-dashboards",
-      "replace": "            shutil.copyfile(actual, expected)\n",
-      "with": "            pass\n"
-    }
-  },
-  "pytest:tests/test_kickoff_config.py::test_cap_hit_continuation_requires_assessment_and_preserves_budget[productive]": {
-    "defect": "Configuration refusals exit successfully",
-    "expect": "failed",
-    "plant": {
-      "path": "bin/kickoff-config",
-      "replace": "    raise SystemExit(2)",
-      "with": "    raise SystemExit(0)"
-    }
-  },
-  "pytest:tests/test_kickoff_config.py::test_cap_hit_continuation_requires_assessment_and_preserves_budget[verdict]": {
-    "defect": "Configuration refusals exit successfully",
-    "expect": "failed",
-    "plant": {
-      "path": "bin/kickoff-config",
-      "replace": "    raise SystemExit(2)",
-      "with": "    raise SystemExit(0)"
+      "replace": "        destination.write_bytes(pending[destination])\n",
+      "with": "        pass\n"
     }
   },
   "pytest:tests/test_kickoff_config.py::test_preflight_groups_only_identical_readiness_commands": {
@@ -132,6 +294,15 @@
       "path": "bin/kickoff-evidence",
       "replace": "    if set(dispatch_by_key) != keys - unlaunched:\n",
       "with": "    if set(dispatch_by_key) != keys:\n"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_a_run_refuses_to_start_on_a_tree_that_fails_the_catalog_check": {
+    "defect": "Run start skips the catalog check",
+    "expect": "RUN STARTED OR CAPTURED EVIDENCE ON A TREE THAT FAILS ITS CATALOG CHECK",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "    require_consistent_catalogs(root)\n    run_dir = require_persistent_directory(\n",
+      "with": "    run_dir = require_persistent_directory(\n"
     }
   },
   "pytest:tests/test_kickoff_evidence.py::test_historical_advice_attestation_preserves_originals[historical-gap]": {

@@ -69,6 +69,7 @@ Keep existing origin/master and GitHub Releases; exact VCS dependencies preclude
 - [Refactoring method and sources](briefs/refactoring-methodology.md)
 - [Draft multi-operator collaboration](briefs/multi-operator-collaboration.md)
 - [Open-source release design](briefs/open-source-releases.md)
+- [Transfer management](briefs/transfer-management.md)
 
 ## Policies catalog
 
