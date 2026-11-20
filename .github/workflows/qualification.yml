@@ -108,7 +108,7 @@ jobs:
               printf 'ASSET_ATTEMPT asset=%s attempt=%s curl=%s http=%s bytes=%s elapsed=%s host=%s remote_ip=%s redirects=%s\n' "${target##*/}" "$attempt" "$curl_exit" "${http_code:-unknown}" "$actual_bytes" "$((SECONDS - started))" "${effective_host:-unknown}" "${remote_ip:-unknown}" "${redirects:-unknown}"
               if [[ "$curl_exit" -eq 0 && "$http_code" == 200 ]]; then
                 [[ "$actual_bytes" == "$expected_bytes" ]] || { printf 'ASSET REFUSED size-mismatch\n' >&2; return 1; }
-                if ! printf '%s  %s\n' "$expected_sha" "$part" | sha256sum --check --status; then
+                if ! printf '%s  %s\n' "$expected_sha" "$part" | sha256sum --check --status -; then
                   printf 'ASSET REFUSED digest-mismatch\n' >&2
                   return 1
                 fi
